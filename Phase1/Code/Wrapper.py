@@ -39,8 +39,9 @@ def main():
 	Read a set of images for Panorama stitching
 	"""
 	pano = MyAutoPano()
-	pano.createImageSet(readImageSet(Args.ImageSet))
 	pano.Visualize = True
+	# pano.Visualize = False
+	pano.createImageSet(readImageSet(Args.ImageSet))
 
 	"""
 	Corner Detection
@@ -48,16 +49,19 @@ def main():
 	"""
 	pano.computeHarrisCorners()
 	# pano.computeShiTomasiCorners()
-
+	
 	"""
 	Perform ANMS: Adaptive Non-Maximal Suppression
 	Save ANMS output as anms.png
 	"""
+	pano.anms(pano.HarrisCorners, 100)
+	# pano.anms(pano.ImageSetShiTomasiCorners, 500)
 
 	"""
 	Feature Descriptors
 	Save Feature Descriptor output as FD.png
 	"""
+	pano.featureDescriptor(pano.ANMSCorners)
 
 	"""
 	Feature Matching
