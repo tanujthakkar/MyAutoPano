@@ -54,7 +54,7 @@ def main():
 	Perform ANMS: Adaptive Non-Maximal Suppression
 	Save ANMS output as anms.png
 	"""
-	pano.anms(pano.HarrisCorners, 100)
+	pano.ANMS(pano.HarrisCorners, 200)
 	# pano.anms(pano.ImageSetShiTomasiCorners, 500)
 
 	"""
@@ -67,7 +67,7 @@ def main():
 	Feature Matching
 	Save Feature Matching output as matching.png
 	"""
-
+	pano.featureMatching()
 
 	"""
 	Refine: RANSAC, Estimate Homography

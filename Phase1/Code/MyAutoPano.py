@@ -26,6 +26,7 @@ class MyAutoPano():
 		self.ImageSetANMS = list()
 		self.ANMSCorners = list()
 		self.Features = list()
+		self.Matches = list()
 
 		# Toggles
 		self.Visualize = False
@@ -64,12 +65,12 @@ class MyAutoPano():
 				cv2.imshow("Shi-Tomasi", self.ImageSetShiTomasiCorners[img])
 				cv2.waitKey(0)
 
-	def anms(self, ImageSetCorners, N_best):
+	def ANMS(self, ImageSetCorners, N_best):
 		self.ImageSetLocalMaxima = np.copy(self.ImageSet)
 		self.ImageSetANMS = np.copy(self.ImageSet)
 		for img in range(len(ImageSetCorners)):
 			ANMSCorners = list()
-			local_maximas = peak_local_max(ImageSetCorners[img], min_distance=10)
+			local_maximas = peak_local_max(ImageSetCorners[img], min_distance=5)
 			local_maximas = np.int0(local_maximas)
 
 			r = [np.Infinity for i in range(len(local_maximas))]
@@ -107,21 +108,49 @@ class MyAutoPano():
 			patch_size = 40
 			features = list()
 			for point in range(len(key_points[img])):
-				print(key_points[img][point])
 				patch = np.uint8(np.array(neighbors(self.ImageSetGray[img], 20, int(key_points[img][point][1]), int(key_points[img][point][2]))))
 				patch_gauss = cv2.resize(cv2.GaussianBlur(patch, (5,5), 0), None, fx=0.2, fy=0.2, interpolation=cv2.INTER_CUBIC)
 				patch_gauss = (patch_gauss - patch_gauss.mean())/patch_gauss.std()
 				features.append(patch_gauss.flatten())
-				if(self.Visualize):
-					temp = cv2.circle(np.copy(self.ImageSet[img]),(int(key_points[img][point][2]), int(key_points[img][point][1])),2,(0,0,255),-1)
-					cv2.imshow("Feature", Feature)
-					# cv2.imshow("ANMS", self.ImageSetANMS[img])
-					cv2.imshow("Patch", patch)
-					cv2.imshow("Patch gauss", patch_gauss)
-					cv2.waitKey(0)
+				# if(self.Visualize):
+				# 	temp = cv2.circle(np.copy(self.ImageSet[img]),(int(key_points[img][point][2]), int(key_points[img][point][1])),2,(0,0,255),-1)
+				# 	cv2.imshow("Feature", temp)
+				# 	# cv2.imshow("ANMS", self.ImageSetANMS[img])
+				# 	cv2.imshow("Patch", patch)
+				# 	cv2.imshow("Patch gauss", patch_gauss)
+				# 	cv2.waitKey(0)
 
 			features = np.array(features)
 			self.Features.append(features)
 
 		self.Features = np.array(self.Features)
-		print(self.Features.shape)
+
+	def featureMatching(self):
+		for img in range(len(self.ImageSet)-1):
+			
+			SSDs = list()
+			matches = list()
+			features = np.arange(len(self.Features[img])).tolist()
+			temp = np.hstack((self.ImageSet[img], self.ImageSet[img+1]))
+			for i in range(len(self.Features[img])):
+				SSDs.clear()
+				for j in features:
+					SSDs.append([sum((self.Features[img][i] - self.Features[img+1][j])**2), j])
+				
+				SSDs = sorted(SSDs)
+				matches.append([i, SSDs[0][1]])
+				# features.remove(SSDs[0][1])
+				
+				if(self.Visualize):
+					# temp = np.hstack((self.ImageSet[img], self.ImageSet[img+1]))
+					temp = cv2.circle(temp,(int(self.ANMSCorners[img][i][2]), int(self.ANMSCorners[img][i][1])),2,(0,0,255),-1)
+					temp = cv2.circle(temp,(int(self.ANMSCorners[img+1][SSDs[0][1]][2])+self.ImageSet[img].shape[1], int(self.ANMSCorners[img+1][SSDs[0][1]][1])),2,(0,0,255),-1)
+					temp = cv2.line(temp, (int(self.ANMSCorners[img][i][2]), int(self.ANMSCorners[img][i][1])), (int(self.ANMSCorners[img+1][SSDs[0][1]][2])+self.ImageSet[img].shape[1], int(self.ANMSCorners[img+1][SSDs[0][1]][1])), (0,255,0), 1)
+					cv2.imshow("1", temp)
+					# cv2.imshow("2", temp2)
+					cv2.waitKey(0)
+
+			matches = np.array(matches)
+			self.Matches.append(matches)
+
+		self.Matches = np.array(self.Matches)
