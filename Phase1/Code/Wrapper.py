@@ -47,32 +47,32 @@ def main():
 	Corner Detection
 	Save Corner detection output as corners.png
 	"""
-	pano.computeHarrisCorners()
+	pano.computeHarrisCorners(False)
 	# pano.computeShiTomasiCorners()
 	
 	"""
 	Perform ANMS: Adaptive Non-Maximal Suppression
 	Save ANMS output as anms.png
 	"""
-	pano.ANMS(pano.HarrisCorners, 200)
+	pano.ANMS(pano.HarrisCorners, 400, False)
 	# pano.anms(pano.ImageSetShiTomasiCorners, 500)
 
 	"""
 	Feature Descriptors
 	Save Feature Descriptor output as FD.png
 	"""
-	pano.featureDescriptor(pano.ANMSCorners)
+	pano.featureDescriptor(pano.ANMSCorners, False)
 
 	"""
 	Feature Matching
 	Save Feature Matching output as matching.png
 	"""
-	pano.featureMatching()
+	pano.featureMatching(False)
 
 	"""
 	Refine: RANSAC, Estimate Homography
 	"""
-	pano.RANSAC(10000,100)
+	pano.RANSAC(5000, 5, True)
 
 
 	"""
