@@ -170,10 +170,12 @@ class MyAutoPano():
 				for j in range(len(feature_pairs)):
 					p1.append([self.ANMSCorners[img][feature_pairs[j]][1], self.ANMSCorners[img][feature_pairs[j]][2]])
 					p2.append([self.ANMSCorners[img+1][self.Matches[img][feature_pairs[j]][1]][1], self.ANMSCorners[img+1][self.Matches[img][feature_pairs[j]][1]][2]])
+				p1 = np.array(p1)
+				p2 = np.array(p2)
 				print(p1)
 				print(p2)
 
-				# H = cv2.getPerspectiveTransform(np.float32(p1), np.float32(p2))
+				H = cv2.getPerspectiveTransform(np.float32(p1), np.float32(p2))
 				# print(H)
 				# print(p1[0])
 				# print(self.ANMSCorners[img])
