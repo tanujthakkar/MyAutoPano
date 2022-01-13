@@ -157,6 +157,9 @@ class MyAutoPano():
 		self.Matches = np.array(self.Matches)
 
 	def RANSAC(self, iterations, threshold):
+
+		max_inliers = 0
+
 		for img in range(len(self.ImageSet)-1):
 			# print(self.Matches[img])
 			# print("1", self.ANMSCorners[img])
@@ -164,7 +167,7 @@ class MyAutoPano():
 			features = np.arange(len(self.Features[img])).tolist()
 			for i in range(iterations):
 				feature_pairs = np.random.choice(features, 4, replace=False)
-				print(feature_pairs)
+				# print(feature_pairs)
 				p1 = []
 				p2 = []
 				for j in range(len(feature_pairs)):
@@ -172,21 +175,41 @@ class MyAutoPano():
 					p2.append([self.ANMSCorners[img+1][self.Matches[img][feature_pairs[j]][1]][1], self.ANMSCorners[img+1][self.Matches[img][feature_pairs[j]][1]][2]])
 				p1 = np.array(p1)
 				p2 = np.array(p2)
-				print(p1)
-				print(p2)
+				# print(p1)
+				# print(p2)
 
 				H = cv2.getPerspectiveTransform(np.float32(p1), np.float32(p2))
 				# print(H)
-				# print(p1[0])
 				# print(self.ANMSCorners[img])
 				# print(np.array([self.ANMSCorners[img][feature_pairs[0]][1], self.ANMSCorners[img][feature_pairs[0]][2], 1]))
 				# # print(np.array([self.ANMSCorners[img][feature_pairs[0]][1], self.ANMSCorners[img][feature_pairs[0]][2], 1]))
 				# # print(np.vstack((self.ANMSCorners[img][:,1], self.ANMSCorners[img][:,2], np.ones([1,len(self.ANMSCorners[img])]))))
-				# # Hp1 = np.dot(H, np.array([p1[0][0], p1[0][1], 1]))
-				# Hp1 = np.dot(H, np.vstack((self.ANMSCorners[img][:,1], self.ANMSCorners[img][:,2], np.ones([1,len(self.ANMSCorners[img])]))))
-				# Hp1 = np.dot(H, np.array([self.ANMSCorners[img][feature_pairs[0],1], self.ANMSCorners[img][feature_pairs[0],2], 1]))
-				# # print(Hp1)
-				# Hp1 = Hp1/Hp1[2]
-				# print(np.array(Hp1).transpose())
-				# print(np.array(Hp1).transpose().shape)
-				input('q')
+				# Hp1 = np.dot(H, np.array([p1[0][0], p1[0][1], 1]))
+				# Hp1 = np.dot(H, np.vstack(([p1[:,0], p1[:,1], np.ones([1,4])])))
+				Hp1 = np.dot(H, np.vstack((self.ANMSCorners[img][:,1], self.ANMSCorners[img][:,2], np.ones([1,len(self.ANMSCorners[img])]))))
+				Hp1 = np.array(Hp1/Hp1[2]).transpose()
+				Hp1 = np.delete(Hp1, 2, 1)
+				# print(Hp1)
+				# print(Hp1.shape)
+				p2_ = list()
+				[p2_.append([self.ANMSCorners[img+1][self.Matches[img][x][1]][1], self.ANMSCorners[img+1][self.Matches[img][x][1]][2]]) for x in range(len(self.Matches[img]))]
+				p2_ = np.array(p2_)
+				# print(p2_)
+
+				# SSD = np.zeros(len(self.Features[img]))
+				SSD = list()
+				[SSD.append(sum((p2_[x] - Hp1[x])**2)) for x in range(len(self.Features[img]))]
+				SSD = np.array(SSD)
+				# print(SSD)
+
+				SSD[SSD <= threshold] = 1
+				SSD[SSD > threshold] = 0
+
+				inliers = np.sum(SSD)
+
+				if(inliers >= max_inliers):
+					max_inliers = inliers
+					print(max_inliers)
+
+			print(max_inliers)
+			input('q')

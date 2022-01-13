@@ -72,7 +72,7 @@ def main():
 	"""
 	Refine: RANSAC, Estimate Homography
 	"""
-	pano.RANSAC(100,5)
+	pano.RANSAC(10000,100)
 
 
 	"""
