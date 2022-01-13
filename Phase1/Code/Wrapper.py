@@ -39,8 +39,8 @@ def main():
 	Read a set of images for Panorama stitching
 	"""
 	pano = MyAutoPano()
-	pano.Visualize = True
-	# pano.Visualize = False
+	# pano.Visualize = True
+	pano.Visualize = False
 	pano.createImageSet(readImageSet(Args.ImageSet))
 
 	"""
@@ -72,6 +72,7 @@ def main():
 	"""
 	Refine: RANSAC, Estimate Homography
 	"""
+	pano.RANSAC(100,5)
 
 
 	"""
