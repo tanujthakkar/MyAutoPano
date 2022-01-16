@@ -30,10 +30,12 @@ def main():
 	# Add any Command Line arguments here
 	Parser = argparse.ArgumentParser()
 	Parser.add_argument('--ImageSet', type=str, default="../Data/Train/Set1/", help='Path of the Image Set')
-	Parser.add_argument('--NumFeatures', type=int, default=100, help='Number of best features to extract from each image, Default:100')
+	Parser.add_argument('--NumImages', type=int, default=None, help='Number of best features to extract from each image, Default:100')
+	Parser.add_argument('--NumFeatures', type=int, default=400, help='Number of best features to extract from each image, Default:100')
 	
 	Args = Parser.parse_args()
-	# NumFeatures = Args.NumFeatures
+	NumImages = Args.NumImages
+	NumFeatures = Args.NumFeatures
 
 	"""
 	Read a set of images for Panorama stitching
@@ -41,21 +43,21 @@ def main():
 	pano = MyAutoPano()
 	# pano.Visualize = True
 	pano.Visualize = False
-	pano.createImageSet(readImageSet(Args.ImageSet))
+	pano.createImageSet(readImageSet(Args.ImageSet), NumImages)
 
 	"""
 	Corner Detection
 	Save Corner detection output as corners.png
 	"""
 	pano.computeHarrisCorners(False)
-	# pano.computeShiTomasiCorners()
+	# pano.computeShiTomasiCorners(NumFeatures, False)
 	
 	"""
 	Perform ANMS: Adaptive Non-Maximal Suppression
 	Save ANMS output as anms.png
 	"""
-	pano.ANMS(pano.HarrisCorners, 400, False)
-	# pano.anms(pano.ImageSetShiTomasiCorners, 500)
+	pano.ANMS(pano.HarrisCorners, NumFeatures, False)
+	# pano.ANMS(pano.ShiTomasiCorners, NumFeatures, False)
 
 	"""
 	Feature Descriptors
@@ -67,19 +69,21 @@ def main():
 	Feature Matching
 	Save Feature Matching output as matching.png
 	"""
-	pano.featureMatching(False)
+	pano.featureMatching(True)
 
 	"""
 	Refine: RANSAC, Estimate Homography
 	"""
-	pano.RANSAC(5000, 5, True)
+	# pano.RANSAC(5000, 5, True)
 
 
 	"""
 	Image Warping + Blending
 	Save Panorama output as mypano.png
 	"""
-
+	# H = pano.test(pano.ImageSet[0], pano.ImageSet[1])
+	# pano.stitchImagePairs(pano.ImageSet[0], pano.ImageSet[1], H)
+	# pano.blendImages(True)
 	
 if __name__ == '__main__':
 	main()
