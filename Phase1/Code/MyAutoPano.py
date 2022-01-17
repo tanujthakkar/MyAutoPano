@@ -30,6 +30,7 @@ class MyAutoPano():
 		self.Matches = list()
 		self.Inliers = list()
 		self.Homography = list()
+		self.BlendedImage = None
 		self.ImageSetRefId = None
 
 		# Toggles
@@ -92,9 +93,9 @@ class MyAutoPano():
 		self.ImageSetANMS = np.copy(self.ImageSet)
 		for img in range(len(ImageSetCorners)):
 			ANMSCorners = list()
-			local_maximas = peak_local_max(ImageSetCorners[img], min_distance=5)
+			local_maximas = peak_local_max(ImageSetCorners[img], min_distance=1)
 			local_maximas = np.int0(local_maximas)
-			print("local_maximas: %d"%len(local_maximas))
+			# print("local_maximas: %d"%len(local_maximas))
 
 			r = [np.Infinity for i in range(len(local_maximas))]
 			ED = 0
@@ -203,22 +204,28 @@ class MyAutoPano():
 				p1 = list()
 				p2 = list()
 				for j in range(len(feature_pairs)):
-					p1.append([self.ANMSCorners[img][self.Matches[img][feature_pairs[j]][0]][1], self.ANMSCorners[img][self.Matches[img][feature_pairs[j]][0]][2]])
-					p2.append([self.ANMSCorners[img+1][self.Matches[img][feature_pairs[j]][1]][1], self.ANMSCorners[img+1][self.Matches[img][feature_pairs[j]][1]][2]])
+					p1.append([self.Matches[img][feature_pairs[j]][1], self.Matches[img][feature_pairs[j]][0]])
+					p2.append([self.Matches[img][feature_pairs[j]][3], self.Matches[img][feature_pairs[j]][2]])
 
 				# p1 = np.array(p1)
 				# p2 = np.array(p2)
 
 				H = cv2.getPerspectiveTransform(np.float32(p1), np.float32(p2))
-				Hp1 = np.dot(H, np.vstack((self.ANMSCorners[img][:,1], self.ANMSCorners[img][:,2], np.ones([1,len(self.ANMSCorners[img])]))))
+				Hp1 = np.dot(H, np.vstack((self.Matches[img][:,1], self.Matches[img][:,0], np.ones([1,len(self.Matches[img])]))))
 				Hp1 = np.array(Hp1/(Hp1[2]+1e-20)).transpose()
 				Hp1 = np.delete(Hp1, 2, 1)
 				p2_ = list()
-				[p2_.append([self.ANMSCorners[img+1][self.Matches[img][x][1]][1], self.ANMSCorners[img+1][self.Matches[img][x][1]][2]]) for x in range(len(self.Matches[img]))]
+				[p2_.append([self.Matches[img][x][3], self.Matches[img][x][2]]) for x in range(len(self.Matches[img]))]
 				p2_ = np.array(p2_)
 
+				# print("Matches: ", self.Matches[img])
+				# print("p2_", p2_)
+				# print("Hp1", Hp1)
+				# input('q')
+
 				SSD = list()
-				[SSD.append(sum((p2_[x] - Hp1[x])**2)) for x in range(len(self.Features[img]))]
+				[SSD.append(sum((p2_[x] - Hp1[x])**2)) for x in range(len(self.Matches[img]))]
+
 				SSD = np.array(SSD)
 				SSD[SSD <= threshold] = 1
 				SSD[SSD > threshold] = 0
@@ -229,36 +236,17 @@ class MyAutoPano():
 					max_inliers = inliers
 					Inliers = np.where(SSD == 1)
 					best_H = H
-					print("Inliers: %d"%max_inliers)
-					print("H: ", H)
-					# temp = np.hstack((self.ImageSet[img], self.ImageSet[img+1]))
-					# for i in range(4):
-					# 	temp = cv2.circle(temp,(int(p1[i][1]), int(p1[i][0])),2,(0,0,255),-1)
-					# 	temp = cv2.circle(temp,(int(p2[i][1])+self.ImageSet[img].shape[1], int(p2[i][0])),2,(0,0,255),-1)
-					# 	temp = cv2.line(temp, (int(p1[i][1]), int(p1[i][0])), (int(p2[i][1])+self.ImageSet[img].shape[1], int(p2[i][0])), (0,255,0), 1)
-					# 	# print((int(self.ANMSCorners[img][i][1]), int(self.ANMSCorners[img][i][2])), (int(self.ANMSCorners[img+1][self.Matches[img][i][1]][1]), int(self.ANMSCorners[img+1][self.Matches[img][i][1]][2])))
-					# cv2.imshow("", temp)
-					# cv2.waitKey(0)
-
-			# p1 = list()
-			# p2 = list()
-			# for i in Inliers[0]:
-			# 		p1.append([int(self.ANMSCorners[img][i][1]), int(self.ANMSCorners[img][i][2])])
-			# 		p2.append([int(self.ANMSCorners[img+1][self.Matches[img][i][1]][1]), int(self.ANMSCorners[img+1][self.Matches[img][i][1]][2])])
-			# print(np.float32(p1[10:14]), np.float32(p2[10:14]))
-			# H = cv2.getPerspectiveTransform(np.float32(p1[10:14]), np.float32(p2[10:14]))
-			# print("Test", H)
-			# best_H = H
-			# input('q')
+					# print("Inliers: %d"%max_inliers)
+					# print("H: ", H)
 
 			print("Inliers: %d"%max_inliers)
 			print("Homography Matrix: ", best_H)
 			if(Visualize):
 				temp = np.hstack((self.ImageSet[img], self.ImageSet[img+1]))
 				for i in Inliers[0]:
-					temp = cv2.circle(temp,(int(self.ANMSCorners[img][i][2]), int(self.ANMSCorners[img][i][1])),2,(0,0,255),-1)
-					temp = cv2.circle(temp,(int(self.ANMSCorners[img+1][self.Matches[img][i][1]][2])+self.ImageSet[img].shape[1], int(self.ANMSCorners[img+1][self.Matches[img][i][1]][1])),2,(0,0,255),-1)
-					temp = cv2.line(temp, (int(self.ANMSCorners[img][i][2]), int(self.ANMSCorners[img][i][1])), (int(self.ANMSCorners[img+1][self.Matches[img][i][1]][2])+self.ImageSet[img].shape[1], int(self.ANMSCorners[img+1][self.Matches[img][i][1]][1])), (0,255,0), 1)
+					temp = cv2.circle(temp,(int(self.Matches[img][i][1]), int(self.Matches[img][i][0])),2,(0,0,255),-1)
+					temp = cv2.circle(temp,(int(self.Matches[img][i][3])+self.ImageSet[img].shape[1], int(self.Matches[img][i][2])),2,(0,0,255),-1)
+					temp = cv2.line(temp, (int(self.Matches[img][i][1]), int(self.Matches[img][i][0])), (int(self.Matches[img][i][3])+self.ImageSet[img].shape[1], int(self.Matches[img][i][2])), (0,255,0), 1)
 					# print((int(self.ANMSCorners[img][i][1]), int(self.ANMSCorners[img][i][2])), (int(self.ANMSCorners[img+1][self.Matches[img][i][1]][1]), int(self.ANMSCorners[img+1][self.Matches[img][i][1]][2])))
 				cv2.imshow("", temp)
 				cv2.waitKey(0)
@@ -282,25 +270,34 @@ class MyAutoPano():
 			# print(c0)
 			# print(c1)
 			print("Homography Matrix", self.Homography[img][0])
-			H_ = np.array([[ 1.19304625e+00  ,1.47056751e-01 ,-6.33663861e+01],
-			 [ 2.79421187e-02  ,1.22945049e+00 ,-2.91078391e+02],
-			 [ 2.77550589e-05  ,5.15827151e-04 , 1.00000000e+00]])
-			self.Homography[img][0] = H
+
 			c0_ = cv2.perspectiveTransform(c0, self.Homography[img][0])
 
 			print(c0_)
 			# print(c0_.shape)
 
-			points_on_image0_transformed_ = list()
-			for p in range(len(c0_)):
-				points_on_image0_transformed_.append(c0_[p].ravel())
+			# points_on_image0_transformed_ = list()
+			# for p in range(len(c0_)):
+			# 	points_on_image0_transformed_.append(c0_[p].ravel())
 
-			points_on_image0_transformed_ = np.array(points_on_image0_transformed_)
-			print(points_on_image0_transformed_.shape)
-			print(points_on_image0_transformed_)
+			# points_on_image0_transformed_ = np.array(points_on_image0_transformed_)
+			# print(points_on_image0_transformed_.shape)
+			# print(points_on_image0_transformed_)
 
-			x_min, y_min = np.int0(np.min(points_on_image0_transformed_, axis = 0))
-			x_max, y_max = np.int0(np.max(points_on_image0_transformed_, axis = 0))
+			# x_min, y_min = np.int0(np.min(points_on_image0_transformed_, axis = 0))
+			# x_max, y_max = np.int0(np.max(points_on_image0_transformed_, axis = 0))
+			
+
+			points_on_merged_images = np.concatenate((c0_, c1), axis = 0)
+			points_on_merged_images_ = []
+
+			for p in range(len(points_on_merged_images)):
+				points_on_merged_images_.append(points_on_merged_images[p].ravel())
+
+			points_on_merged_images_ = np.array(points_on_merged_images_)
+
+			x_min, y_min = np.int0(np.min(points_on_merged_images_, axis = 0))
+			x_max, y_max = np.int0(np.max(points_on_merged_images_, axis = 0))
 			
 			print("min, max")
 			print(x_min, y_min)
@@ -321,24 +318,14 @@ class MyAutoPano():
 
 			images_stitched[y,x] = image0_transformed[y,x]
 
-			# images_stitched = image0_transformed
-			# images_stitched[-y_min:-y_min+h1, -x_min: -x_min+w1] = self.ImageSet[img+1]
+			# self.ImageSet[img+1] = np.copy(images_stitched)
 
-			# for y in range(0, h1):
-			# 	for x in range(0, w1):
-			# 		if(self.ImageSet[img+1][y,x,:] == [0,0,0]):
-			# 			images_stitched[-y_min + y, -x_min + x] = image0_transformed[-y_min + y, -x_min + x]
-
-			# p = np.concatenate((c0_, c1), axis=0)
-
-			# temp = cv2.warpPerspective(self.ImageSet[img], np.linalg.inv(self.Homography[H][0]))
-			# temp[0:self.ImageSet[int(len(self.ImageSet)/2)].shape[0], 0:self.ImageSet[int(len(self.ImageSet)/2)].shape[1]] = self.ImageSet[int(len(self.ImageSet)/2)]
 			H += 1
 
 			if(Visualize):
-				cv2.imshow("IMG", self.ImageSet[img])
-				cv2.imshow("Ref", self.ImageSet[img+1])
-				cv2.imshow("Transformed", image0_transformed)
+				# cv2.imshow("IMG", self.ImageSet[img])
+				# cv2.imshow("Ref", self.ImageSet[img+1])
+				# cv2.imshow("Transformed", image0_transformed)
 				cv2.imshow("Stiched", images_stitched)
 				cv2.waitKey(0)
 
@@ -355,6 +342,14 @@ class MyAutoPano():
 		# H_ = np.array([[ 1.19304625e+00  ,1.47056751e-01 ,-6.33663861e+01],
 		# 	 [ 2.79421187e-02  ,1.22945049e+00 ,-2.91078391e+02],
 		# 	 [ 2.77550589e-05  ,5.15827151e-04 , 1.00000000e+00]])
+
+		# H = np.array([[1.08398682e+00, 3.19384037e-02, -2.57784635e+02],
+		# 				[3.36233377e-02, 1.09228695e+00, -2.54869246e+01],
+		# 				[1.45784997e-04, 7.70741686e-05, 1.00000000e+00]])
+
+		# H = np.array([[ 1.14791463e+00  ,1.22486313e-02 ,-2.68057888e+02],
+		# 			[ 1.10516692e-01  ,1.09299787e+00 ,-4.55779430e+01],
+		# 			[ 3.29369028e-04 ,-2.42303857e-05  ,1.00000000e+00]])
 
 		# print(abs(H-H_))
 
