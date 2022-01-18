@@ -22,8 +22,8 @@ class MyAutoPano():
 		self.NumFeatures = NumFeatures
 		self.ImageSetHeight = cv2.imread(ImageSetPath[0]).shape[0]
 		self.ImageSetWidth = cv2.imread(ImageSetPath[0]).shape[1]
-		self.ImageSet = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
-		self.ImageSetGray = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth]))
+		self.ImageSet = list()
+		self.ImageSetGray = list()
 		self.ImageSetHarrisCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
 		self.ImageSetShiTomasiCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
 		self.HarrisCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth]))
@@ -41,27 +41,12 @@ class MyAutoPano():
 		# Toggles
 		self.Visualize = False
 
-	def createImageSet(self, ImageSet, N=None, N_best=0, height=None, width=None):
-		if(N == None):
-			N = len(ImageSet)
-		if(not height and not width):
-			height = cv2.imread(ImageSet[0]).shape[0]
-			width = cv2.imread(ImageSet[0]).shape[1]
-		[self.ImageSet.append(cv2.imread(ImageSet[img])) for img in range(N)] # Reading images
+	def createImageSet(self):
+		[self.ImageSet.append(cv2.imread(self.ImageSetPath[img])) for img in range(N)] # Reading images
 		[self.ImageSetGray.append(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)) for img in self.ImageSet] # Converting images to grayscale
-		self.ImageSet = np.array(self.ImageSet) 
+		self.ImageSet = np.array(self.ImageSet)
 		self.ImageSetGray = np.float32(np.array(self.ImageSetGray))
 		self.ImageSetRefId = int(len(self.ImageSet)/2) # Setting a reference to the anchor image
-		self.N_best = N_best
-
-		# Initializing other lists
-		self.HarrisCorners = np.empty([0, height, width, 3])
-		self.ImageSetShiTomasiCorners = np.uint8(np.empty([0, height, width, 3]))
-		self.ShiTomasiCorners = np.uint8(np.empty([0, height, width]))
-		self.ImageSetLocalMaxima = np.uint8(np.empty([0, height, width, 3]))
-		self.ImageSetANMS = np.uint8(np.empty([0, height, width, 3]))
-		self.ANMSCorners = np.empty([0, N_best, 3])
-		self.Features = np.empty([0, N_best, 64])
 
 	def computeHarrisCorners(self, Visualize):
 		print("Computing Harris Corners...")
@@ -295,16 +280,21 @@ class MyAutoPano():
 		self.Inliers = np.array(self.Inliers, dtype=object)
 		self.Homography = np.array(self.Homography)
 
-	def generatePanorama(self):
+	def generatePanorama(self, Visualize):
 		print("Generating Panorama...")
 
-		print(self.ImageSetPath)
+		self.createImageSet()
+
 		for img in range(len(self.ImageSetPath)):
 
-			self.ImageSet = np.insert(self.ImageSet, img, cv2.imread(self.ImageSetPath[img]), axis=0)
-			print(self.ImageSet.shape)
-			self.computeShiTomasiCorners(self.ImageSet[-1], True)
+			# self.ImageSet = np.insert(self.ImageSet, img, cv2.imread(self.ImageSetPath[img]), axis=0)
+			# print(self.ImageSet.shape)
+			# self.computeShiTomasiCorners(self.ImageSet[-1], True)
 
+			if(Visualize):
+				cv2.imshow("IMG", self.ImageSet[img])
+				cv2.imshow("IMG Gray", self.ImageSetGray[img])
+				cv2.waitKey(0)
 
 	def blendImages(self, Visualize):
 		print("Blending Images...")
