@@ -29,9 +29,10 @@ from Helper import *
 def main():
 	# Add any Command Line arguments here
 	Parser = argparse.ArgumentParser()
-	Parser.add_argument('--ImageSet', type=str, default="../Data/Train/Set1/", help='Path of the Image Set')
+	Parser.add_argument('--ImageSetPath', type=str, default="../Data/Train/Set1/", help='Path of the Image Set')
 	Parser.add_argument('--NumImages', type=int, default=None, help='Number of best features to extract from each image, Default:100')
 	Parser.add_argument('--NumFeatures', type=int, default=400, help='Number of best features to extract from each image, Default:100')
+	Parser.add_argument('--ResultPath', type=str, default="../Data/Train/Results/", help='Path to save the generated results')
 	
 	Args = Parser.parse_args()
 	NumImages = Args.NumImages
@@ -40,7 +41,7 @@ def main():
 	"""
 	Read a set of images for Panorama stitching
 	"""
-	pano = MyAutoPano(readImageSet(Args.ImageSet), Args.NumFeatures)
+	pano = MyAutoPano(readImageSet(Args.ImageSetPath), Args.NumFeatures, Args.ResultPath, 300, 400)
 	pano.generatePanorama(True)
 	# pano.Visualize = True
 	# pano.Visualize = False
