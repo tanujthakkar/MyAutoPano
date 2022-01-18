@@ -40,41 +40,42 @@ def main():
 	"""
 	Read a set of images for Panorama stitching
 	"""
-	pano = MyAutoPano()
+	pano = MyAutoPano(readImageSet(Args.ImageSet), Args.NumFeatures)
+	pano.generatePanorama()
 	# pano.Visualize = True
-	pano.Visualize = False
-	pano.createImageSet(readImageSet(Args.ImageSet), NumImages)
+	# pano.Visualize = False
+	# pano.createImageSet(readImageSet(Args.ImageSet), NumImages, NumFeatures)
 
 	"""
 	Corner Detection
 	Save Corner detection output as corners.png
 	"""
 	# pano.computeHarrisCorners(False)
-	pano.computeShiTomasiCorners(NumFeatures, False)
+	# pano.computeShiTomasiCorners(pano.ImageSetGray[0], NumFeatures, True)
 	
 	"""
 	Perform ANMS: Adaptive Non-Maximal Suppression
 	Save ANMS output as anms.png
 	"""
 	# pano.ANMS(pano.HarrisCorners, NumFeatures, False)
-	pano.ANMS(pano.ShiTomasiCorners, NumFeatures, False)
+	# pano.ANMS(pano.ShiTomasiCorners, NumFeatures, False)
 
 	"""
 	Feature Descriptors
 	Save Feature Descriptor output as FD.png
 	"""
-	pano.featureDescriptor(pano.ANMSCorners, False)
+	# pano.featureDescriptor(pano.ANMSCorners, False)
 
 	"""
 	Feature Matching
 	Save Feature Matching output as matching.png
 	"""
-	pano.featureMatching(False)
+	# pano.featureMatching(False)
 
 	"""
 	Refine: RANSAC, Estimate Homography
 	"""
-	pano.RANSAC(5000, 5, False)
+	# pano.RANSAC(5000, 5, True)
 
 
 	"""
@@ -83,7 +84,7 @@ def main():
 	"""
 	# H = pano.test(pano.ImageSet[0], pano.ImageSet[1])
 	# pano.stitchImagePairs(pano.ImageSet[0], pano.ImageSet[1], pano.Homography[0][0])
-	pano.blendImages(True)
+	# pano.blendImages(True)
 	
 if __name__ == '__main__':
 	main()

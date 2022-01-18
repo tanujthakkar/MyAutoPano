@@ -16,17 +16,22 @@ from Helper import *
 
 class MyAutoPano():
 
-	def __init__(self):
-		self.ImageSet = list()
-		self.ImageSetGray = list()
-		self.ImageSetHarrisCorners = list()
-		self.ImageSetShiTomasiCorners = list()
-		self.HarrisCorners = list()
-		self.ShiTomasiCorners = list()
-		self.ImageSetLocalMaxima = list()
-		self.ImageSetANMS = list()
-		self.ANMSCorners = list()
-		self.Features = list()
+	def __init__(self, ImageSetPath, NumFeatures):
+		self.ImageCount = 0
+		self.ImageSetPath = ImageSetPath
+		self.NumFeatures = NumFeatures
+		self.ImageSetHeight = cv2.imread(ImageSetPath[0]).shape[0]
+		self.ImageSetWidth = cv2.imread(ImageSetPath[0]).shape[1]
+		self.ImageSet = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
+		self.ImageSetGray = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth]))
+		self.ImageSetHarrisCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
+		self.ImageSetShiTomasiCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
+		self.HarrisCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth]))
+		self.ShiTomasiCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth]))
+		self.ImageSetLocalMaxima = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
+		self.ImageSetANMS = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
+		self.ANMSCorners = np.empty([0, self.NumFeatures, 3])
+		self.Features = np.empty([0, self.NumFeatures, 64])
 		self.Matches = list()
 		self.Inliers = list()
 		self.Homography = list()
@@ -36,14 +41,27 @@ class MyAutoPano():
 		# Toggles
 		self.Visualize = False
 
-	def createImageSet(self, ImageSet, N=None, height=None, width=None):
+	def createImageSet(self, ImageSet, N=None, N_best=0, height=None, width=None):
 		if(N == None):
 			N = len(ImageSet)
-		[self.ImageSet.append(cv2.imread(ImageSet[img])) for img in range(N)]
-		[self.ImageSetGray.append(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)) for img in self.ImageSet]
-		self.ImageSet = np.array(self.ImageSet)
+		if(not height and not width):
+			height = cv2.imread(ImageSet[0]).shape[0]
+			width = cv2.imread(ImageSet[0]).shape[1]
+		[self.ImageSet.append(cv2.imread(ImageSet[img])) for img in range(N)] # Reading images
+		[self.ImageSetGray.append(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)) for img in self.ImageSet] # Converting images to grayscale
+		self.ImageSet = np.array(self.ImageSet) 
 		self.ImageSetGray = np.float32(np.array(self.ImageSetGray))
-		self.ImageSetRefId = int(len(self.ImageSet)/2)
+		self.ImageSetRefId = int(len(self.ImageSet)/2) # Setting a reference to the anchor image
+		self.N_best = N_best
+
+		# Initializing other lists
+		self.HarrisCorners = np.empty([0, height, width, 3])
+		self.ImageSetShiTomasiCorners = np.uint8(np.empty([0, height, width, 3]))
+		self.ShiTomasiCorners = np.uint8(np.empty([0, height, width]))
+		self.ImageSetLocalMaxima = np.uint8(np.empty([0, height, width, 3]))
+		self.ImageSetANMS = np.uint8(np.empty([0, height, width, 3]))
+		self.ANMSCorners = np.empty([0, N_best, 3])
+		self.Features = np.empty([0, N_best, 64])
 
 	def computeHarrisCorners(self, Visualize):
 		print("Computing Harris Corners...")
@@ -58,137 +76,157 @@ class MyAutoPano():
 			if(Visualize):
 				# cv2.imshow("", img)
 				cv2.imshow("Harris Corners", self.ImageSetHarrisCorners[i])
-				cv2.imshow("cimg", self.HarrisCorners[i])
+				cv2.imshow("Corner Score", self.HarrisCorners[i])
 				cv2.waitKey(0)
 		self.HarrisCorners = np.float32(np.array(self.HarrisCorners))
 
-	def computeShiTomasiCorners(self, N_best, Visualize):
+	def computeShiTomasiCorners(self, Image, Visualize):
 		print("Computing Shi-Tomasi Corners...")
-		self.ImageSetShiTomasiCorners = np.copy(self.ImageSet)
-		for img in range(len(self.ImageSetGray)):
-			corners = cv2.goodFeaturesToTrack(self.ImageSetGray[img], N_best, 0.01, 10) # Computing corners using the Shi-Tomasi method
-			corners = np.int0(corners)
-			print("ShiTomasiCorners in Image %d: %d"%(img, len(corners)))
+		# self.ImageSetShiTomasiCorners = np.copy(self.ImageSet)
+		# for img in range(len(self.ImageSetGray)):
 
-			ShiTomasiCorners = np.zeros(self.ImageSet.shape[1:3])
-			for corner in corners: # Marking corners in RGB image
-				x,y = corner.ravel()
-				ShiTomasiCorners[y,x] = 255
-				cv2.circle(self.ImageSetShiTomasiCorners[img],(x,y),2,(0,0,255),-1)
+		ImageGray = cv2.cvtColor(Image, cv2.COLOR_BGR2GRAY)
+		corners = cv2.goodFeaturesToTrack(ImageGray, self.NumFeatures, 0.01, 10) # Computing corners using the Shi-Tomasi method
+		corners = np.int0(corners)
+		print("ShiTomasiCorners in Image %d: %d"%(0, len(corners)))
 
-			self.ShiTomasiCorners.append(ShiTomasiCorners)
+		ShiTomasiCorners = np.zeros(Image.shape[0:2])
+		ImageSetShiTomasiCorners = np.copy(Image)
+		for corner in corners: # Marking corners in RGB image
+			x,y = corner.ravel()
+			ShiTomasiCorners[y,x] = 255
+			# cv2.circle(self.ImageSetShiTomasiCorners[img],(x,y),2,(0,0,255),-1)
+			cv2.circle(ImageSetShiTomasiCorners,(x,y),2,(0,0,255),-1)
 
-			if(Visualize):
-				cv2.imshow("Shi-Tomasi Corners", self.ImageSetShiTomasiCorners[img])
-				cv2.imshow("Corners", self.ShiTomasiCorners[img])
-				cv2.waitKey(0)
+		self.ImageSetShiTomasiCorners = np.insert(self.ImageSetShiTomasiCorners, self.ImageCount, ImageSetShiTomasiCorners, axis=0)
+		self.ShiTomasiCorners = np.insert(self.ShiTomasiCorners, self.ImageCount, ShiTomasiCorners, axis=0)
 
-		self.ShiTomasiCorners = np.array(self.ShiTomasiCorners)
+		if(Visualize):
+			cv2.imshow("Shi-Tomasi Corners", self.ImageSetShiTomasiCorners[-1])
+			cv2.imshow("Corners", self.ShiTomasiCorners[-1])
+			cv2.waitKey(0)
+
+		# self.ShiTomasiCorners = np.array(self.ShiTomasiCorners)
 		print(self.ShiTomasiCorners.shape)
 
-	def ANMS(self, ImageSetCorners, N_best, Visualize):
+	def ANMS(self, Image, ImageSetCorners, N_best, Visualize):
 		print("Applying ANMS...")
 
-		self.ImageSetLocalMaxima = np.copy(self.ImageSet)
-		self.ImageSetANMS = np.copy(self.ImageSet)
-		for img in range(len(ImageSetCorners)):
-			ANMSCorners = list()
-			local_maximas = peak_local_max(ImageSetCorners[img], min_distance=1)
-			local_maximas = np.int0(local_maximas)
-			# print("local_maximas: %d"%len(local_maximas))
+		print(ImageSetCorners.shape)
+		# self.ImageSetLocalMaxima = np.copy(self.ImageSet)
+		# self.ImageSetANMS = np.copy(self.ImageSet)
+		# for img in range(len(ImageSetCorners)):
+		ANMSCorners = list()
+		local_maximas = peak_local_max(ImageSetCorners[self.ImageCount], min_distance=1)
+		local_maximas = np.int0(local_maximas)
+		print("local_maximas: %d"%len(local_maximas))
 
-			r = [np.Infinity for i in range(len(local_maximas))]
-			ED = 0
+		if(N_best < len(local_maximas)):
+			print('test')
+			N_best = len(local_maximas)
 
-			for i in tqdm(range(len(local_maximas))):
-				for j in range(len(local_maximas)):
-					if(ImageSetCorners[img][local_maximas[j,0],local_maximas[j,1]] > ImageSetCorners[img][local_maximas[i,0],local_maximas[i,1]]):
-						ED = math.sqrt((local_maximas[j,0] - local_maximas[i,0])**2 + (local_maximas[j,1] - local_maximas[i,1])**2)
-						# print(ED)
-					if(ED < r[i]):
-						r[i] = ED
-				ANMSCorners.append([r[i], local_maximas[i,0], local_maximas[i,1]])
+		r = [np.Infinity for i in range(len(local_maximas))]
+		ED = 0
 
-			ANMSCorners = sorted(ANMSCorners, reverse=True)
-			ANMSCorners = np.array(ANMSCorners[:N_best])
-			print("ANMS Corners: %d"%len(ANMSCorners))
-			self.ANMSCorners.append(ANMSCorners)
+		for i in tqdm(range(len(local_maximas))):
+			for j in range(len(local_maximas)):
+				if(ImageSetCorners[self.ImageCount][local_maximas[j,0],local_maximas[j,1]] > ImageSetCorners[self.ImageCount][local_maximas[i,0],local_maximas[i,1]]):
+					ED = math.sqrt((local_maximas[j,0] - local_maximas[i,0])**2 + (local_maximas[j,1] - local_maximas[i,1])**2)
+					# print(ED)
+				if(ED < r[i]):
+					r[i] = ED
+			ANMSCorners.append([r[i], local_maximas[i,0], local_maximas[i,1]])
 
-			if(Visualize):
-				for local_maxima in local_maximas: # Marking corners in RGB image
-					y,x = local_maxima.ravel()
-					cv2.circle(self.ImageSetLocalMaxima[img],(x,y),2,(0,255,0),-1)
-					# cv2.circle(self.ImageSetANMS[img],(x,y),2,(0,255,0),-1)
+		ANMSCorners = sorted(ANMSCorners, reverse=True)
+		ANMSCorners = np.array(ANMSCorners[:N_best])
+		print("ANMS Corners: %d"%len(ANMSCorners))
+		self.ANMSCorners = np.insert(self.ANMSCorners, self.ImageCount, ANMSCorners, axis=0)
+		# print(self.ANMSCorners[-1])
 
-				for i in range(N_best): # Marking corners in RGB image
-					cv2.circle(self.ImageSetANMS[img],(int(ANMSCorners[i][2]),int(ANMSCorners[i][1])),2,(0,0,255),-1)
+		ImageSetLocalMaxima = np.copy(self.ImageSet[self.ImageCount])
+		ImageSetANMS = np.copy(self.ImageSet[self.ImageCount])
 
-				cv2.imshow("Local Max", self.ImageSetLocalMaxima[img])
-				cv2.imshow("ANMS", self.ImageSetANMS[img])
-				cv2.waitKey(0)
+		for local_maxima in local_maximas: # Marking corners in RGB image
+				y,x = local_maxima.ravel()
+				cv2.circle(ImageSetLocalMaxima,(x,y),2,(0,255,0),-1)
+				# cv2.circle(self.ImageSetANMS[img],(x,y),2,(0,255,0),-1)
 
-		self.ANMSCorners = np.array(self.ANMSCorners)
-		# print(self.ANMSCorners.shape)
+		for i in range(N_best): # Marking corners in RGB image
+			cv2.circle(ImageSetANMS,(int(ANMSCorners[i][2]),int(ANMSCorners[i][1])),2,(0,0,255),-1)
+		
+		self.ImageSetLocalMaxima = np.insert(self.ImageSetLocalMaxima, self.ImageCount, ImageSetLocalMaxima, axis=0)
+		self.ImageSetANMS = np.insert(self.ImageSetANMS, self.ImageCount, ImageSetANMS, axis=0)
+
+		if(Visualize):
+			# cv2.imshow("", self.ImageSet[self.ImageCount])
+			cv2.imshow("Local Max", self.ImageSetLocalMaxima[-1])
+			cv2.imshow("ANMS", self.ImageSetANMS[-1])
+			cv2.waitKey(0)
+
+		# self.ANMSCorners = np.array(self.ANMSCorners)
+		print(self.ANMSCorners.shape)
 
 	def featureDescriptor(self, key_points, Visualize):
 		print("Retrieving feature patches...")
 
-		for img in range(len(self.ImageSetGray)):
-			patch_size = 40
-			features = list()
-			for point in range(len(key_points[img])):
-				patch = np.uint8(np.array(neighbors(self.ImageSetGray[img], 20, int(key_points[img][point][1]), int(key_points[img][point][2]))))
-				patch_gauss = cv2.resize(cv2.GaussianBlur(patch, (5,5), 0), None, fx=0.2, fy=0.2, interpolation=cv2.INTER_CUBIC)
-				patch_gauss = (patch_gauss - patch_gauss.mean())/patch_gauss.std()
-				features.append(patch_gauss.flatten())
-				if(Visualize):
-					temp = cv2.circle(np.copy(self.ImageSet[img]),(int(key_points[img][point][2]), int(key_points[img][point][1])),2,(0,0,255),-1)
-					cv2.imshow("Feature", temp)
-					# cv2.imshow("ANMS", self.ImageSetANMS[img])
-					cv2.imshow("Patch", patch)
-					cv2.imshow("Patch gauss", patch_gauss)
-					cv2.waitKey(0)
+		# for img in range(len(self.ImageSetGray)):
+		patch_size = 40
+		features = list()
+		for point in range(len(key_points[self.ImageCount])):
+			patch = np.uint8(np.array(neighbors(self.ImageSetGray[self.ImageCount], 20, int(key_points[self.ImageCount][point][1]), int(key_points[self.ImageCount][point][2]))))
+			patch_gauss = cv2.resize(cv2.GaussianBlur(patch, (5,5), 0), None, fx=0.2, fy=0.2, interpolation=cv2.INTER_CUBIC)
+			patch_gauss = (patch_gauss - patch_gauss.mean())/patch_gauss.std()
+			features.append(patch_gauss.flatten())
+			if(Visualize):
+				temp = cv2.circle(np.copy(self.ImageSet[self.ImageCount]),(int(key_points[self.ImageCount][point][2]), int(key_points[self.ImageCount][point][1])),2,(0,0,255),-1)
+				cv2.imshow("Feature", temp)
+				# cv2.imshow("ANMS", self.ImageSetANMS[img])
+				cv2.imshow("Patch", patch)
+				cv2.imshow("Patch gauss", patch_gauss)
+				cv2.waitKey(0)
 
-			features = np.array(features)
-			self.Features.append(features)
+		features = np.array(features)
+		self.Features = np.insert(self.Features, self.ImageCount, features, axis=0)
 
-		self.Features = np.array(self.Features)
+		# self.Features = np.array(self.Features)
+		# print(self.Features.shape)
 
 	def featureMatching(self, Visualize):
 		print("Matching features...")
-		for img in range(len(self.ImageSet)-1):
+		# for img in range(len(self.ImageSet)-1):
 			
-			SSDs = list()
-			matches = list()
-			features = np.arange(len(self.Features[img])).tolist()
-			temp = np.hstack((self.ImageSet[img], self.ImageSet[img+1]))
-			for i in tqdm(range(len(self.Features[img]))):
-				SSDs.clear()
-				for j in features:
-					SSDs.append([sum((self.Features[img][i] - self.Features[img+1][j])**2), self.ANMSCorners[img+1][j][1], self.ANMSCorners[img+1][j][2]])
+		SSDs = list()
+		matches = list()
+		features = np.arange(len(self.Features[self.ImageCount])).tolist()
+		temp = np.hstack((self.ImageSet[self.ImageCount], self.ImageSet[self.ImageCount+1]))
+		for i in tqdm(range(len(self.Features[self.ImageCount]))):
+			SSDs.clear()
+			for j in features:
+				SSDs.append([sum((self.Features[self.ImageCount][i] - self.Features[self.ImageCount+1][j])**2), self.ANMSCorners[self.ImageCount+1][j][1], self.ANMSCorners[self.ImageCount+1][j][2]])
 
-				SSDs = sorted(SSDs)
-				# print([self.ANMSCorners[img][i][1], self.ANMSCorners[img][i][2], SSDs[0][1], SSDs[0][2]])
-				matches.append([self.ANMSCorners[img][i][1], self.ANMSCorners[img][i][2], SSDs[0][1], SSDs[0][2]])
-				# input('q')
-				# features.remove(SSDs[0][1])
+			SSDs = sorted(SSDs)
+			# print([self.ANMSCorners[img][i][1], self.ANMSCorners[img][i][2], SSDs[0][1], SSDs[0][2]])
+			matches.append([self.ANMSCorners[self.ImageCount][i][1], self.ANMSCorners[self.ImageCount][i][2], SSDs[0][1], SSDs[0][2]])
+			# input('q')
+			# features.remove(SSDs[0][1])
 
-				if(Visualize):
-					# temp = np.hstack((self.ImageSet[img], self.ImageSet[img+1]))
-					temp = cv2.circle(temp,(int(self.ANMSCorners[img][i][2]), int(self.ANMSCorners[img][i][1])),2,(0,0,255),-1)
-					temp = cv2.circle(temp,(int(SSDs[0][2])+self.ImageSet[img].shape[1], int(SSDs[0][1])),2,(0,0,255),-1)
-					temp = cv2.line(temp, (int(self.ANMSCorners[img][i][2]), int(self.ANMSCorners[img][i][1])), (int(SSDs[0][2])+self.ImageSet[img].shape[1], int(SSDs[0][1])), (0,255,0), 1)
-					cv2.imshow("1", temp)
-					# cv2.imshow("2", temp2)
+			if(Visualize):
+				# temp = np.hstack((self.ImageSet[img], self.ImageSet[img+1]))
+				temp = cv2.circle(temp,(int(self.ANMSCorners[self.ImageCount][i][2]), int(self.ANMSCorners[self.ImageCount][i][1])),2,(0,0,255),-1)
+				temp = cv2.circle(temp,(int(SSDs[0][2])+self.ImageSet[self.ImageCount].shape[1], int(SSDs[0][1])),2,(0,0,255),-1)
+				temp = cv2.line(temp, (int(self.ANMSCorners[self.ImageCount][i][2]), int(self.ANMSCorners[self.ImageCount][i][1])), (int(SSDs[0][2])+self.ImageSet[self.ImageCount].shape[1], int(SSDs[0][1])), (0,255,0), 1)
+				cv2.imshow("1", temp)
+				# cv2.imshow("2", temp2)
 
-			print("Matches: %d", len(matches))
-			cv2.waitKey(0)
+		print("Matches: %d", len(matches))
+		cv2.waitKey(0)
 
-			matches = np.array(matches)
-			self.Matches.append(matches)
+		matches = np.array(matches)
+		print(matches.shape)
+		# self.Matches.append(matches)
 
-		self.Matches = np.array(self.Matches)
-		print(self.Matches.shape)
+		# self.Matches = np.array(self.Matches)
+		# print(self.Matches.shape)
 
 	def RANSAC(self, iterations, threshold, Visualize):
 		print("Performing RANSAC...")
@@ -257,175 +295,90 @@ class MyAutoPano():
 		self.Inliers = np.array(self.Inliers, dtype=object)
 		self.Homography = np.array(self.Homography)
 
+	def generatePanorama(self):
+		print("Generating Panorama...")
+
+		print(self.ImageSetPath)
+		for img in range(len(self.ImageSetPath)):
+
+			self.ImageSet = np.insert(self.ImageSet, img, cv2.imread(self.ImageSetPath[img]), axis=0)
+			print(self.ImageSet.shape)
+			self.computeShiTomasiCorners(self.ImageSet[-1], True)
+
+
 	def blendImages(self, Visualize):
 		print("Blending Images...")
+		# self.BlendedImage = np.copy(self.ImageSet[0])
 		for img in range(len(self.ImageSet)-1):
-			H = 0
-			h0, w0 = self.ImageSet[img].shape[:2]
-			h1, w1 = self.ImageSet[img+1].shape[:2]
 
-			c0 = np.float32([[0, 0], [0, h0], [w0, h0], [w0, 0]]).reshape(-1, 1, 2)
-			c1 = np.float32([[0, 0], [0, h1], [w1, h1], [w1, 0]]).reshape(-1, 1, 2)
+			self.computeShiTomasiCorners(self.N_best, False)
+			self.ANMS(self.ShiTomasiCorners, self.N_best, False)
+			self.featureDescriptor(self.ANMSCorners, False)
 
-			# print(c0)
-			# print(c1)
-			print("Homography Matrix", self.Homography[img][0])
+			# self.computeShiTomasiCorners(self.N_best, False)
+			# self.ANMS(self.ShiTomasiCorners, self.N_best, False)
+			# self.featureDescriptor(self.ANMSCorners, False)
 
-			c0_ = cv2.perspectiveTransform(c0, self.Homography[img][0])
+			# self.featureMatching(True)
 
-			print(c0_)
-			# print(c0_.shape)
+			# self.ImageCount += 1
 
-			# points_on_image0_transformed_ = list()
-			# for p in range(len(c0_)):
-			# 	points_on_image0_transformed_.append(c0_[p].ravel())
+			# h0, w0 = self.ImageSet[img].shape[:2]
+			# h1, w1 = self.ImageSet[img+1].shape[:2]
 
-			# points_on_image0_transformed_ = np.array(points_on_image0_transformed_)
-			# print(points_on_image0_transformed_.shape)
-			# print(points_on_image0_transformed_)
+			# c0 = np.float32([[0, 0], [0, h0], [w0, h0], [w0, 0]]).reshape(-1, 1, 2)
+			# c1 = np.float32([[0, 0], [0, h1], [w1, h1], [w1, 0]]).reshape(-1, 1, 2)
 
-			# x_min, y_min = np.int0(np.min(points_on_image0_transformed_, axis = 0))
-			# x_max, y_max = np.int0(np.max(points_on_image0_transformed_, axis = 0))
+			# # H = np.ones((3,3))
+			# # if(img < self.ImageSetRefId):
+			# # 	for i in range(img+1):
+			# # 		H = H*self.Homography[i][0]
+			# # else:
+			# # 	H = np.linalg.inv(self.Homography[img][0])
+
+			# print("Homography Matrix", self.Homography[img][0])
+
+			# c0_ = cv2.perspectiveTransform(c0, self.Homography[img][0])
+
+			# points_on_merged_images = np.concatenate((c0_, c1), axis = 0)
+			# points_on_merged_images_ = []
+
+			# for p in range(len(points_on_merged_images)):
+			# 	points_on_merged_images_.append(points_on_merged_images[p].ravel())
+
+			# points_on_merged_images_ = np.array(points_on_merged_images_)
+
+			# x_min, y_min = np.int0(np.min(points_on_merged_images_, axis = 0))
+			# x_max, y_max = np.int0(np.max(points_on_merged_images_, axis = 0))
 			
+			# print("min, max")
+			# print(x_min, y_min)
+			# print(x_max, y_max)
 
-			points_on_merged_images = np.concatenate((c0_, c1), axis = 0)
-			points_on_merged_images_ = []
+			# H_translate = np.array([[1, 0, -x_min], [0, 1, -y_min], [0, 0, 1]]) # translate
 
-			for p in range(len(points_on_merged_images)):
-				points_on_merged_images_.append(points_on_merged_images[p].ravel())
+			# image0_transformed = cv2.warpPerspective(self.ImageSet[img], np.dot(H_translate, self.Homography[img][0]), (x_max-x_min, y_max-y_min))
 
-			points_on_merged_images_ = np.array(points_on_merged_images_)
+			# images_stitched = image0_transformed.copy()
+			# print(images_stitched.shape)
+			# print("test", -y_min, -y_min+h1, -x_min, -x_min+w1)
+			# images_stitched[-y_min:-y_min+h1, -x_min: -x_min+w1] = self.ImageSet[img+1]
 
-			x_min, y_min = np.int0(np.min(points_on_merged_images_, axis = 0))
-			x_max, y_max = np.int0(np.max(points_on_merged_images_, axis = 0))
-			
-			print("min, max")
-			print(x_min, y_min)
-			print(x_max, y_max)
+			# indices = np.where(self.ImageSet[img+1] == [0,0,0])
+			# y = indices[0] + -y_min 
+			# x = indices[1] + -x_min 
 
-			H_translate = np.array([[1, 0, -x_min], [0, 1, -y_min], [0, 0, 1]]) # translate
+			# images_stitched[y,x] = image0_transformed[y,x]
 
-			image0_transformed = cv2.warpPerspective(self.ImageSet[img], np.dot(H_translate, self.Homography[img][0]), (x_max-x_min, y_max-y_min))
-
-			images_stitched = image0_transformed.copy()
-			print(images_stitched.shape)
-			print("test", -y_min, -y_min+h1, -x_min, -x_min+w1)
-			images_stitched[-y_min:-y_min+h1, -x_min: -x_min+w1] = self.ImageSet[img+1]
-
-			indices = np.where(self.ImageSet[img+1] == [0,0,0])
-			y = indices[0] + -y_min 
-			x = indices[1] + -x_min 
-
-			images_stitched[y,x] = image0_transformed[y,x]
+			# self.BlendedImage = images_stitched
 
 			# self.ImageSet[img+1] = np.copy(images_stitched)
 
-			H += 1
+			# H += 1
 
-			if(Visualize):
-				# cv2.imshow("IMG", self.ImageSet[img])
-				# cv2.imshow("Ref", self.ImageSet[img+1])
-				# cv2.imshow("Transformed", image0_transformed)
-				cv2.imshow("Stiched", images_stitched)
-				cv2.waitKey(0)
-
-	def stitchImagePairs(self, img0, img1, H):
-
-		image0 = img0.copy()
-		image1 = img1.copy()
-
-		#stitch image 0 on image 1
-		print("shapes")
-		print(image0.shape)
-		print(image1.shape)
-		
-		# H_ = np.array([[ 1.19304625e+00  ,1.47056751e-01 ,-6.33663861e+01],
-		# 	 [ 2.79421187e-02  ,1.22945049e+00 ,-2.91078391e+02],
-		# 	 [ 2.77550589e-05  ,5.15827151e-04 , 1.00000000e+00]])
-
-		# H = np.array([[1.08398682e+00, 3.19384037e-02, -2.57784635e+02],
-		# 				[3.36233377e-02, 1.09228695e+00, -2.54869246e+01],
-		# 				[1.45784997e-04, 7.70741686e-05, 1.00000000e+00]])
-
-		# H = np.array([[ 1.14791463e+00  ,1.22486313e-02 ,-2.68057888e+02],
-		# 			[ 1.10516692e-01  ,1.09299787e+00 ,-4.55779430e+01],
-		# 			[ 3.29369028e-04 ,-2.42303857e-05  ,1.00000000e+00]])
-
-		# print(abs(H-H_))
-
-		h0 ,w0 ,_ = image0.shape
-		h1 ,w1 ,_ = image1.shape
-
-		points_on_image0 = np.float32([[0, 0], [0, h0], [w0, h0], [w0, 0]]).reshape(-1,1,2)
-		# H = np.linalg.inv(H)
-		print("Homography Matrix", H)
-		points_on_image0_transformed = cv2.perspectiveTransform(points_on_image0, H)
-		print("transformed points = ", points_on_image0_transformed)
-		points_on_image1 = np.float32([[0, 0], [0, h1], [w1, h1], [w1, 0]]).reshape(-1,1,2)
-
-		points_on_merged_images = np.concatenate((points_on_image0_transformed, points_on_image1), axis = 0)
-		points_on_merged_images_ = []
-
-		for p in range(len(points_on_merged_images)):
-			points_on_merged_images_.append(points_on_merged_images[p].ravel())
-
-		points_on_merged_images_ = np.array(points_on_merged_images_)
-
-		x_min, y_min = np.int0(np.min(points_on_merged_images_, axis = 0))
-		x_max, y_max = np.int0(np.max(points_on_merged_images_, axis = 0))
-
-		print("min, max")
-		print(x_min, y_min)
-		print(x_max, y_max)
-
-		# overlap_area = cv2.polylines(image1,[np.int32(points_on_image0_transformed)],True,255,3, cv2.LINE_AA) 
-		# cv2.imshow("original_image_overlapping.jpg", overlap_area)
-		# cv2.waitKey() 
-		# cv2.destroyAllWindows()
-		H_translate = np.array([[1, 0, -x_min], [0, 1, -y_min], [0, 0, 1]]) # translate
-
-		image0_transformed_and_stitched = cv2.warpPerspective(image0, np.dot(H_translate, H), (x_max-x_min, y_max-y_min))
-
-		#image0_transformed_and_stitched[-y_min:-y_min+h1, -x_min: -x_min+w1] = image1
-
-		images_stitched = image0_transformed_and_stitched.copy()
-		images_stitched[-y_min:-y_min+h1, -x_min: -x_min+w1] = image1
-
-		indices = np.where(image1 == [0,0,0])
-		y = indices[0] + -y_min 
-		x = indices[1] + -x_min 
-
-		images_stitched[y,x] = image0_transformed_and_stitched[y,x]
-
-		cv2.imshow("", image0_transformed_and_stitched)
-		cv2.imshow("s", images_stitched)
-		cv2.waitKey(0)
-		
-		return images_stitched
-
-	def test(self, img1, img2):
-		sift = cv2.xfeatures2d.SIFT_create()
-		# find the keypoints and descriptors with SIFT
-		kp1, des1 = sift.detectAndCompute(img1,None)
-		kp2, des2 = sift.detectAndCompute(img2,None)
-
-		bf = cv2.BFMatcher()
-		matches = bf.knnMatch(des1,des2, k=2)
-
-		# Apply ratio test
-		good = []
-		for m in matches:
-			if m[0].distance < 0.5*m[1].distance:
-				good.append(m)
-		matches = np.asarray(good)
-
-		if len(matches[:,0]) >= 4:
-			src = np.float32([ kp1[m.queryIdx].pt for m in matches[:,0] ]).reshape(-1,1,2)
-			dst = np.float32([ kp2[m.trainIdx].pt for m in matches[:,0] ]).reshape(-1,1,2)
-
-		H, masked = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
-		# H_ = cv2.getPerspectiveTransform(src, dst)
-
-		print(H)
-
-		return H
+			# if(Visualize):
+			# 	# cv2.imshow("IMG", self.ImageSet[img])
+			# 	# cv2.imshow("Ref", self.ImageSet[img+1])
+			# 	# cv2.imshow("Transformed", image0_transformed)
+			# 	cv2.imshow("Stiched", images_stitched)
+			# 	cv2.waitKey(0)
