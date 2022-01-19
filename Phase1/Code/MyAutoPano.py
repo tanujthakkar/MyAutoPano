@@ -214,7 +214,19 @@ class MyAutoPano():
         features = np.arange(N).tolist()
 
         if(Visualize):
-            temp = np.hstack((Image0, Image1))
+            if(Image0.shape != Image1.shape):
+                print("Image0 shape", Image0.shape)
+                print("Image1 shape", Image1.shape)
+                temp_ = np.uint8(np.zeros(Image1.shape))
+                print("temp_ shape", temp_.shape)
+                temp_[0:Image0.shape[0],0:Image0.shape[1]] = Image0
+                cv2.imshow("", temp_)
+                cv2.waitKey(0)
+                print("test_")
+                temp = np.hstack((temp_, Image1))
+            else:
+                print('test')
+                temp = np.hstack((Image0, Image1))
         
         for i in tqdm(range(N)):
             SSDs.clear()
@@ -230,8 +242,8 @@ class MyAutoPano():
 
             if(Visualize):
                 temp = cv2.circle(temp,(int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])),2,(0,0,255),-1)
-                temp = cv2.circle(temp,(int(SSDs[0][2])+Image0.shape[1], int(SSDs[0][1])),2,(0,0,255),-1)
-                temp = cv2.line(temp, (int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])), (int(SSDs[0][2])+Image0.shape[1], int(SSDs[0][1])), (0,255,0), 1)
+                temp = cv2.circle(temp,(int(SSDs[0][2])+Image1.shape[1], int(SSDs[0][1])),2,(0,0,255),-1)
+                temp = cv2.line(temp, (int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])), (int(SSDs[0][2])+Image1.shape[1], int(SSDs[0][1])), (0,255,0), 1)
                 cv2.imshow("Matches", temp)
                 # cv2.imshow("2", temp2)
 
@@ -315,11 +327,20 @@ class MyAutoPano():
         # print("Homography Matrix: ", best_H)
 
         if(Visualize):
-            temp = np.hstack((Image0, Image1))
+            if(Image0.shape != Image1.shape):
+                temp_ = np.uint8(np.zeros(Image1.shape))
+                temp_[0:Image0.shape[0],0:Image0.shape[1]] = Image0
+                cv2.imshow("", temp_)
+                cv2.waitKey(0)
+                print("test_")
+                temp = np.hstack((temp_, Image1))
+            else:
+                print('test')
+                temp = np.hstack((Image0, Image1))
             for i in Inliers[0]:
                 temp = cv2.circle(temp,(int(Matches[i][1]), int(Matches[i][0])),2,(0,0,255),-1)
-                temp = cv2.circle(temp,(int(Matches[i][3])+Image0.shape[1], int(Matches[i][2])),2,(0,0,255),-1)
-                temp = cv2.line(temp, (int(Matches[i][1]), int(Matches[i][0])), (int(Matches[i][3])+Image0.shape[1], int(Matches[i][2])), (0,255,0), 1)
+                temp = cv2.circle(temp,(int(Matches[i][3])+Image1.shape[1], int(Matches[i][2])),2,(0,0,255),-1)
+                temp = cv2.line(temp, (int(Matches[i][1]), int(Matches[i][0])), (int(Matches[i][3])+Image1.shape[1], int(Matches[i][2])), (0,255,0), 1)
                 # print((int(self.ANMSCorners[img][i][1]), int(self.ANMSCorners[img][i][2])), (int(self.ANMSCorners[img+1][self.Matches[img][i][1]][1]), int(self.ANMSCorners[img+1][self.Matches[img][i][1]][2])))
             cv2.imshow("", temp)
             cv2.waitKey(0)
@@ -332,20 +353,6 @@ class MyAutoPano():
         # self.Homography = np.array(self.Homography)
 
         return best_H
-
-    def addBorder(self, img, rect):
-        x, y, w, h = rect
-        tl = (x, y)
-        br = (x + w, y + h)
-
-        top = int(-tl[1] if tl[1] < 0 else 0)
-        bottom = int(br[1] - img.shape[0] if br[1] > img.shape[0] else 0)
-        left = int(-tl[0] if tl[0] < 0 else 0)
-        right = int(br[0] - img.shape[1] if br[0] > img.shape[1] else 0)
-        img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-        orig = (left, top)
-
-        return img, orig
 
     def mean_blend(self, img1, img2):
         assert(img1.shape == img2.shape)
@@ -380,16 +387,11 @@ class MyAutoPano():
         # print("Homography Matrix", H)
 
         c0_ = cv2.perspectiveTransform(c0, H)
-        # print(c0_)
-        # print(c1)
 
         corners = np.concatenate((c0_, c1), axis = 0).reshape(8,2)
 
         x_min, y_min = np.int0(np.min(corners, axis = 0))
         x_max, y_max = np.int0(np.max(corners, axis = 0))
-
-        # xpos = int(-x_min if x_min < 0 else 0)
-        # ypos = int(-y_min if y_min < 0 else 0)
         
         # print("min, max")
         # print(x_min, y_min)
@@ -399,28 +401,12 @@ class MyAutoPano():
 
         Image0_Warped = cv2.warpPerspective(Image0, np.dot(H_translate, H), (x_max-x_min, y_max-y_min))
 
-        # Image0_Warped = np.ascontiguousarray(Image0_, dtype=np.uint8)
-
-        # Image0_WarpedGray = cv2.cvtColor(Image0_Warped, cv2.COLOR_RGB2GRAY)
-        # _, bw = cv2.threshold(Image0_WarpedGray, 1, 255, cv2.THRESH_BINARY)
-        # cnts, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        # Image0_Warped = cv2.drawContours(Image0_Warped, cnts, 0, [0, 0, 0], lineType=cv2.LINE_4)
-
-        # rect = (xpos, ypos, Image1.shape[1], Image1.shape[0])
-        # ImageStitched, _ = self.addBorder(Image0_Warped, rect)
-
         ImageStitched = np.copy(Image0_Warped)
         # ImageStitched[-y_min:-y_min+h1, -x_min: -x_min+w1] = Image1
         idx = np.s_[-y_min:-y_min+h1, -x_min: -x_min+w1]
         ImageStitched[idx] = self.mean_blend(ImageStitched[idx], Image1)
 
-        # x, y, w, h = cv2.boundingRect(cv2.cvtColor(ImageStitched, cv2.COLOR_RGB2GRAY))
-        # ImageStitched = ImageStitched[y : y + h, x : x + w]
-
         if(Visualize):
-            # cv2.imshow("IMG", self.ImageSet[img])
-            # cv2.imshow("Ref", self.ImageSet[img+1])
-            # cv2.imshow("Transformed", image0_transformed)
             cv2.imshow("Image0_", Image0_Warped)
             cv2.imshow("Stiched", ImageStitched)
             cv2.waitKey(0)
@@ -432,98 +418,50 @@ class MyAutoPano():
 
         self.createImageSet()
 
-        print("Generating first half...")
         start = 0
-        I = self.ImageSet[start+1]
+        PanoHalves = list()
+        for i in range(2):
 
-        ShiTomasiCorners0 = self.computeShiTomasiCorners(self.ImageSet[start], False)
-        ANMSCorners0, _, _ = self.ANMS(self.ImageSet[start], ShiTomasiCorners0, False)
-        Features0 = self.featureDescriptor(self.ImageSet[start], ANMSCorners0, False)
+            I = self.ImageSet[start+1]
 
-        # HarrisCorners1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-        ShiTomasiCorners1 = self.computeShiTomasiCorners(I, False)
-        ANMSCorners1, _, _ = self.ANMS(I, ShiTomasiCorners1, False)
-        Features1 = self.featureDescriptor(I, ANMSCorners1, False)
-
-        Matches = self.featureMatching(self.ImageSet[start], I, Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-        H = self.RANSAC(Matches, self.ImageSet[start], I, 5000, 5, False)
-        I = self.stitchImages(self.ImageSet[start], I, H, True)
-        
-        for img in range(start+2, self.ImageSetRefId):
-            print("Stitching Frames %d & %d"%(img, img+1))
-
-            # HarrisCorners0 = self.computeHarrisCorners(self.ImageSet[img], True)
-            ShiTomasiCorners0 = self.computeShiTomasiCorners(self.ImageSet[img], False)
-            ANMSCorners0, _, _ = self.ANMS(self.ImageSet[img], ShiTomasiCorners0, False)
-            Features0 = self.featureDescriptor(self.ImageSet[img], ANMSCorners0, False)
+            ShiTomasiCorners0 = self.computeShiTomasiCorners(self.ImageSet[start], False)
+            ANMSCorners0, _, _ = self.ANMS(self.ImageSet[start], ShiTomasiCorners0, False)
+            Features0 = self.featureDescriptor(self.ImageSet[start], ANMSCorners0, False)
 
             # HarrisCorners1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
             ShiTomasiCorners1 = self.computeShiTomasiCorners(I, False)
             ANMSCorners1, _, _ = self.ANMS(I, ShiTomasiCorners1, False)
             Features1 = self.featureDescriptor(I, ANMSCorners1, False)
 
-            Matches = self.featureMatching(self.ImageSet[img], I, Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-            H = self.RANSAC(Matches, self.ImageSet[img], I, 5000, 5, False)
-            I = self.stitchImages(self.ImageSet[img], I, H, True)
+            Matches = self.featureMatching(self.ImageSet[start], I, Features0, Features1, ANMSCorners0, ANMSCorners1, True)
 
-            # Matches = self.featureMatching(I, self.ImageSet[img], Features1, Features0, ANMSCorners1, ANMSCorners0, False)
-            # H = self.RANSAC(Matches, I, self.ImageSet[img], 5000, 5, False)
-            # I = self.stitchImages(I, self.ImageSet[img], H, True)
+            H = self.RANSAC(Matches, self.ImageSet[start], I, 5000, 5, True)
+            I = self.stitchImages(self.ImageSet[start], I, H, True)
+            
+            for img in range(start+2, self.ImageSetRefId):
+                print("Stitching Frames %d & %d"%(img, img+1))
 
-        PanoFirstHalf = I
+                # HarrisCorners0 = self.computeHarrisCorners(self.ImageSet[img], True)
+                ShiTomasiCorners0 = self.computeShiTomasiCorners(self.ImageSet[img], False)
+                ANMSCorners0, _, _ = self.ANMS(self.ImageSet[img], ShiTomasiCorners0, False)
+                Features0 = self.featureDescriptor(self.ImageSet[img], ANMSCorners0, False)
 
-        print("Generating second half...")
-        start = self.ImageSetRefId
-        I = self.ImageSet[start+1]
+                # HarrisCorners1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+                ShiTomasiCorners1 = self.computeShiTomasiCorners(I, False)
+                ANMSCorners1, _, _ = self.ANMS(I, ShiTomasiCorners1, False)
+                Features1 = self.featureDescriptor(I, ANMSCorners1, False)
 
-        ShiTomasiCorners0 = self.computeShiTomasiCorners(self.ImageSet[start], False)
-        ANMSCorners0, _, _ = self.ANMS(self.ImageSet[start], ShiTomasiCorners0, False)
-        Features0 = self.featureDescriptor(self.ImageSet[start], ANMSCorners0, False)
+                Matches = self.featureMatching(self.ImageSet[img], I, Features0, Features1, ANMSCorners0, ANMSCorners1, True)
+                H = self.RANSAC(Matches, self.ImageSet[img], I, 5000, 5, True)
+                I = self.stitchImages(self.ImageSet[img], I, H, True)
 
-        # HarrisCorners1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-        ShiTomasiCorners1 = self.computeShiTomasiCorners(I, False)
-        ANMSCorners1, _, _ = self.ANMS(I, ShiTomasiCorners1, False)
-        Features1 = self.featureDescriptor(I, ANMSCorners1, False)
+            PanoHalves.append(I)
 
-        Matches = self.featureMatching(self.ImageSet[start], I, Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-        H = self.RANSAC(Matches, self.ImageSet[start], I, 5000, 10, False)
-        I = self.stitchImages(self.ImageSet[start], I, H, True)
-
-        for img in range(self.ImageSetRefId+2, len(self.ImageSet)):
-            print("Stitching Frames %d & %d"%(img, img+1))
-
-            ShiTomasiCorners0 = self.computeShiTomasiCorners(self.ImageSet[img], False)
-            ANMSCorners0, _, _ = self.ANMS(self.ImageSet[img], ShiTomasiCorners0, False)
-            Features0 = self.featureDescriptor(self.ImageSet[img], ANMSCorners0, False)
-
-            ShiTomasiCorners1 = self.computeShiTomasiCorners(I, False)
-            ANMSCorners1, _, _ = self.ANMS(I, ShiTomasiCorners1, False)
-            Features1 = self.featureDescriptor(I, ANMSCorners1, False)
-
-            Matches = self.featureMatching(I, self.ImageSet[img], Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-            H = self.RANSAC(Matches, self.ImageSet[img], I, 5000, 10, False)
-            I = self.stitchImages(self.ImageSet[img], I, H, True)
-
-            # ShiTomasiCorners0 = self.computeShiTomasiCorners(self.ImageSet[img+2], False)
-            # ANMSCorners0, _, _ = self.ANMS(self.ImageSet[img+2], ShiTomasiCorners0, False)
-            # Features0 = self.featureDescriptor(self.ImageSet[img+2], ANMSCorners0, False)
-
-            # ShiTomasiCorners1 = self.computeShiTomasiCorners(I, False)
-            # ANMSCorners1, _, _ = self.ANMS(I, ShiTomasiCorners1, False)
-            # Features1 = self.featureDescriptor(I, ANMSCorners1, False)
-
-            # Matches = self.featureMatching(self.ImageSet[img+2], I, Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-            # H = self.RANSAC(Matches, self.ImageSet[img+2], I, 5000, 5, False)
-
-            # I = self.blendImages(self.ImageSet[img+2], I, H, True)
-
-            # if(Visualize):
-                # cv2.imshow("IMG", self.ImageSet[img])
-                # cv2.imshow("IMG Gray", self.ImageSetGray[img])
-                # cv2.waitKey(0)
+            start = self.ImageSetRefId
 
         print("Generating final panorama...")
-        PanoSecondHalf = I
+        PanoFirstHalf = PanoHalves[0]
+        PanoSecondHalf = PanoHalves[1]
 
         ShiTomasiCorners0 = self.computeShiTomasiCorners(PanoFirstHalf, False)
         ANMSCorners0, _, _ = self.ANMS(PanoFirstHalf, ShiTomasiCorners0, False)
@@ -538,5 +476,5 @@ class MyAutoPano():
         H = self.RANSAC(Matches, PanoFirstHalf, PanoSecondHalf, 5000, 10, False)
         I = self.stitchImages(PanoFirstHalf, PanoSecondHalf, H, True)
 
-        print(self.ResultPath + 'pano.png')
-        cv2.imwrite(self.ResultPath + 'pano.png', I)
+        # print(self.ResultPath + 'pano.png')
+        # cv2.imwrite(self.ResultPath + 'pano.png', I)
