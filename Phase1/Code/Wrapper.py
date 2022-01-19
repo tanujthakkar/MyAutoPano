@@ -41,7 +41,7 @@ def main():
 	"""
 	Read a set of images for Panorama stitching
 	"""
-	pano = MyAutoPano(readImageSet(Args.ImageSetPath), Args.NumFeatures, Args.ResultPath)
+	pano = MyAutoPano(readImageSet(Args.ImageSetPath), Args.NumFeatures, Args.ResultPath, 300, 400)
 	pano.generatePanorama(True)
 
 	# pano.Visualize = True

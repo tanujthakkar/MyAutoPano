@@ -20,6 +20,7 @@ class MyAutoPano():
         self.ImageCount = 0
         self.ImageSetPath = ImageSetPath
         self.ResultPath = ResultPath
+        os.makedirs(self.ResultPath, exist_ok = True)
         # print(self.ImageSetPath)
         self.NumFeatures = NumFeatures
         if(not ImageSetHeight and not ImageSetWidth):
@@ -398,8 +399,6 @@ class MyAutoPano():
 
         Image0_Warped = cv2.warpPerspective(Image0, np.dot(H_translate, H), (x_max-x_min, y_max-y_min))
 
-        cv2.imshow("Image0_", Image0_Warped)
-
         # Image0_Warped = np.ascontiguousarray(Image0_, dtype=np.uint8)
 
         # Image0_WarpedGray = cv2.cvtColor(Image0_Warped, cv2.COLOR_RGB2GRAY)
@@ -422,6 +421,7 @@ class MyAutoPano():
             # cv2.imshow("IMG", self.ImageSet[img])
             # cv2.imshow("Ref", self.ImageSet[img+1])
             # cv2.imshow("Transformed", image0_transformed)
+            cv2.imshow("Image0_", Image0_Warped)
             cv2.imshow("Stiched", ImageStitched)
             cv2.waitKey(0)
 
@@ -463,12 +463,14 @@ class MyAutoPano():
             Features1 = self.featureDescriptor(I, ANMSCorners1, False)
 
             Matches = self.featureMatching(self.ImageSet[img], I, Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-            H = self.RANSAC(Matches, self.ImageSet[img], I, 5000, 10, False)
+            H = self.RANSAC(Matches, self.ImageSet[img], I, 5000, 5, False)
             I = self.stitchImages(self.ImageSet[img], I, H, True)
 
             # Matches = self.featureMatching(I, self.ImageSet[img], Features1, Features0, ANMSCorners1, ANMSCorners0, False)
             # H = self.RANSAC(Matches, I, self.ImageSet[img], 5000, 5, False)
             # I = self.stitchImages(I, self.ImageSet[img], H, True)
+
+        PanoFirstHalf = I
 
         print("Generating second half...")
         start = self.ImageSetRefId
@@ -519,3 +521,22 @@ class MyAutoPano():
                 # cv2.imshow("IMG", self.ImageSet[img])
                 # cv2.imshow("IMG Gray", self.ImageSetGray[img])
                 # cv2.waitKey(0)
+
+        print("Generating final panorama...")
+        PanoSecondHalf = I
+
+        ShiTomasiCorners0 = self.computeShiTomasiCorners(PanoFirstHalf, False)
+        ANMSCorners0, _, _ = self.ANMS(PanoFirstHalf, ShiTomasiCorners0, False)
+        Features0 = self.featureDescriptor(PanoFirstHalf, ANMSCorners0, False)
+
+        # HarrisCorners1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+        ShiTomasiCorners1 = self.computeShiTomasiCorners(PanoSecondHalf, False)
+        ANMSCorners1, _, _ = self.ANMS(PanoSecondHalf, ShiTomasiCorners1, False)
+        Features1 = self.featureDescriptor(PanoSecondHalf, ANMSCorners1, False)
+
+        Matches = self.featureMatching(PanoFirstHalf, PanoSecondHalf, Features0, Features1, ANMSCorners0, ANMSCorners1, False)
+        H = self.RANSAC(Matches, PanoFirstHalf, PanoSecondHalf, 5000, 10, False)
+        I = self.stitchImages(PanoFirstHalf, PanoSecondHalf, H, True)
+
+        print(self.ResultPath + 'pano.png')
+        cv2.imwrite(self.ResultPath + 'pano.png', I)
