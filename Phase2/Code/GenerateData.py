@@ -60,10 +60,13 @@ def generatePatchSet(ImagePath, Resize, PatchSize, MaxPerturbation, Tolerance, S
     HC_A = np.array(HC_A/(HC_A[2]+1e-20)).transpose()
     HC_A = np.delete(HC_A, 2, 1)
 
+    Test = C_A + H4
+
     if(Visualize):
         # ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(Boundary)], True, (255, 255, 255), 2)
         ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(C_A)], True, (255, 0, 0), 2)
         ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(C_B)], True, (0, 0, 255), 2)
+        # ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(Test)], True, (0, 255, 0), 2)
         ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(C_A)], True, (0, 0, 255), 2)
         ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(HC_A)], True, (255, 0, 0), 2)
         

@@ -16,6 +16,7 @@ import numpy as np
 # Don't generate pyc codes
 sys.dont_write_bytecode = True
 
+
 def HomographyModel(Img, ImageSize, MiniBatchSize):
     """
     Inputs: 
