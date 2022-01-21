@@ -42,7 +42,6 @@ class TrainSupervised():
         self.Optimizer = None
         self.Epoch = 0 # Current epoch of the training operation
         self.TrainingData = None
-        self.ValidationData = None
         self.PatchA_training_data = None
         self.PatchB_training_data = None
         self.H4_training_data = None
@@ -73,10 +72,9 @@ class TrainSupervised():
 
             running_loss += loss
 
-        print(int(len(self.PatchA_training_data[:10])/4), batch)
-        result = generateResult(self.TrainingData[int(len(self.PatchA_training_data[:10])/4)], deprocess_H4_data(y_.numpy()), self.H_AB_training_data[batch], [240, 320], [128,128], 32, True)
-        save_image(result, os.path.join(self.ResultsPath, 'Train', '%d.jpg'%self.Epoch))
-        running_loss = running_loss/len(self.PatchA_training_data) # Mean loss of the epoch
+        print("Epoch Final Prediction: ", y_)
+        generateResult(self.TrainingData[2], deprocess_H4_data(y_.numpy()), self.H_AB_training_data[batch], [240, 320], [128,128], 32, True)
+        running_loss = running_loss/len(self.PatchA_training_data[:10]) # Mean loss of the epoch
         print("Training Loss: %f"%running_loss)
 
         return running_loss
@@ -85,7 +83,7 @@ class TrainSupervised():
 
         running_loss = 0.0
 
-        for batch in tqdm(range(int(len(self.PatchA_validation_data[:10])/self.BatchSize))):
+        for batch in tqdm(range(int(len(self.PatchA_validation_data)/self.BatchSize))):
             X = np.empty([0, 128, 128, 2]) # Input to the network
             y = np.empty([0, 8]) # Ground Truth
 
@@ -98,8 +96,7 @@ class TrainSupervised():
 
             running_loss += loss
 
-        result = generateResult(self.ValidationData[int(len(self.PatchA_validation_data[:10])/4)], deprocess_H4_data(y_.numpy()), self.H_AB_validation_data[batch], [240, 320], [128,128], 32, True)
-        save_image(result, os.path.join(self.ResultsPath, 'Val', '%d.jpg'%self.Epoch))
+        print("Epoch Final Prediction: ", y_)
         running_loss = running_loss/len(self.PatchA_validation_data) # Mean loss of the epoch
         print("Validation Loss: %f"%running_loss)
 
@@ -129,15 +126,13 @@ class TrainSupervised():
             os.makedirs(self.CheckpointPath)
             self.ResultsPath = os.path.join(self.TrainingDir, 'Results') # Initializing results directory of current training instance
             os.makedirs(self.ResultsPath)
-            os.makedirs(os.path.join(self.ResultsPath, 'Train'))
-            os.makedirs(os.path.join(self.ResultsPath, 'Val'))
             print("Training Data Path: %s"%self.TrainingDir)
             print("Checkpoints Path: %s"%self.CheckpointPath)
             print("Results Path: %s"%self.ResultsPath)
 
             StartEpoch = 1 # Initializing starting epoch of the training operation
 
-        learning_rate = 1E-4 # Learning rate of 0.005 from the paper
+        learning_rate = 1E-3 # Learning rate of 0.005 from the paper
         momentum = 0.9 # Momentum of SGD from the paper
         # opt = SGD(momentum=momentum, learning_rate=learning_rate) # Using Stochastic Gradient Descent as optimizer for training
         opt = Adam(learning_rate=learning_rate)
@@ -145,10 +140,10 @@ class TrainSupervised():
 
         # Creating a Checkpoint Manager
         ckpt = Checkpoint(step=tf.Variable(0), model=self.Model, optimizer=self.Optimizer)
-        ckpt_manager = CheckpointManager(ckpt, self.CheckpointPath, max_to_keep=5)
+        ckpt_manager = CheckpointManager(ckpt, self.CheckpointPath, max_to_keep=None)
 
         self.TrainingData = readImageSet('../Data/Train/')
-        self.ValidationData = readImageSet('../Data/Val/')
+
         # Loading Traning Data
         self.PatchA_training_data = readImageSet(os.path.join(self.DatasetPath, 'Train', 'PatchA')) # Getting relative paths to PatchA training images
         self.PatchB_training_data = readImageSet(os.path.join(self.DatasetPath, 'Train', 'PatchB')) # Gettings relative paths to PatchB training images
@@ -187,20 +182,21 @@ class TrainSupervised():
                 print("Epoch %d of %d"%((epoch), self.Epochs-1))
                 self.Epoch = epoch # Updating current epoch
 
-                if(epoch%500 == 0):
+                if(epoch%100 == 0):
                     learning_rate = learning_rate / 2
                     print("Updated Learning Rate: %f"%learning_rate)
                     self.Optimizer.lr.assign(learning_rate)
 
                 training_epoch_loss = self.fit()
-                validation_epoch_loss = self.validate()
+                # validation_epoch_loss = self.validate()
+                validation_epoch_loss = 0
 
                 ckpt.step.assign_add(1)
                 if(epoch%100 == 0):
                     save_path = ckpt_manager.save()
                     print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
 
-                data = [epoch, np.mean(self.Optimizer.lr.numpy()), np.mean(training_epoch_loss.numpy()), np.mean(validation_epoch_loss.numpy())]
+                data = [epoch, np.mean(self.Optimizer.lr.numpy()), training_epoch_loss, validation_epoch_loss]
                 if(epoch == 1):
                     df = pd.DataFrame([data], columns = ['Epochs', 'Learning Rate','Training Loss', 'Validation Loss'])
                     df.to_csv(os.path.join(self.TrainingDir, 'model_state.csv'), mode='a')
@@ -211,8 +207,8 @@ class TrainSupervised():
                 x.append(epoch)
                 y1.append(training_epoch_loss)
                 y2.append(validation_epoch_loss)
-                plt.plot(x, y1, 'red')
-                plt.plot(x, y2, 'orange')
+                plt.plot(x, y1)
+                plt.plot(x, y2)
                 plt.pause(0.3)
 
             plt.show()
