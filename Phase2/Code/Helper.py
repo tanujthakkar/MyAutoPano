@@ -6,6 +6,7 @@ import numpy as np
 import os
 import re
 from PIL import Image
+import tensorflow.keras.backend as K
 
 
 def readImageSet(ImageSet):
@@ -33,3 +34,36 @@ def save_image(np_arr, path):
     img = np_arr * 127.5 + 127.5
     im = Image.fromarray((img).astype(np.uint8))
     im.save(path)
+
+def remap(x, oMin, oMax, iMin, iMax):
+    # Taken from https://stackoverflow.com/questions/929103/convert-a-number-range-to-another-range-maintaining-ratios
+    #range check
+    if oMin == oMax:
+        print("Warning: Zero input range")
+        return None
+
+    if iMin == iMax:
+        print("Warning: Zero output range")
+        return None
+
+     # portion = (x-oldMin)*(newMax-newMin)/(oldMax-oldMin)
+    result = np.add(np.divide(np.multiply(x - iMin, oMax - oMin), iMax - iMin), oMin)
+
+    return result
+
+def preprocess_H4_data(H4, rho=32):
+    H4 = remap(H4, -1.0, 1.0, -rho, rho)
+    return H4.reshape(8)
+
+def deprocess_H4_data(H4, rho=32):
+    H4 = remap(H4, -rho, rho, -1.0, 1.0)
+    return np.int32(H4.reshape(4,2))
+
+def L2_loss(y_true, y_pred):
+    return K.mean((y_pred-y_true)**2)
+
+def main():
+    pass
+
+if __name__ == '__main__':
+    main()

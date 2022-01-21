@@ -13,6 +13,7 @@ import random
 from datetime import datetime
 
 from Helper import *
+from Misc.MiscUtils import *
 
 sys.dont_write_bytecode = True
 
@@ -28,7 +29,7 @@ def generatePatchSet(ImagePath, Resize, PatchSize, MaxPerturbation, Tolerance, S
     P_ymax = int(Resize[1] - (PatchSize[1]/2 + MaxPerturbation))
     P = [random.randint(P_xmin, P_xmax), random.randint(P_ymin, P_ymax)] # Random patch center [row, column]
 
-    PatchA = np.uint8(np.array(getPatch(ImageAGray, int(PatchSize[0]/2), P[0], P[1]))) # Random patch from ImageA
+    PatchA = np.uint8(ImageAGray[P[0]-int(PatchSize[0]/2):P[0]+int(PatchSize[0]/2), P[1]-int(PatchSize[1]/2):P[1]+int(PatchSize[1]/2)])
 
     C_A = np.float32([[P[1]-PatchSize[1]/2, P[0]-PatchSize[0]/2],
                      [P[1]-PatchSize[1]/2, P[0]+PatchSize[0]/2],
@@ -46,7 +47,7 @@ def generatePatchSet(ImagePath, Resize, PatchSize, MaxPerturbation, Tolerance, S
     ImageB = cv2.warpPerspective(ImageA, H_BA, (ImageA.shape[1], ImageA.shape[0])) # ImageA warped with respect to H_BA
     ImageBGray = cv2.cvtColor(ImageB, cv2.COLOR_BGR2GRAY)
 
-    PatchB = np.uint8(np.array(getPatch(ImageBGray, int(PatchSize[0]/2), P[0], P[1]))) # Warped Patch
+    PatchB = np.uint8(ImageBGray[P[0]-int(PatchSize[0]/2):P[0]+int(PatchSize[0]/2), P[1]-int(PatchSize[1]/2):P[1]+int(PatchSize[1]/2)])
 
     PatchStack = np.dstack((PatchA, PatchB)) # Stacking patches channel-wise for network input
     # print(PatchStack.shape)
@@ -61,6 +62,9 @@ def generatePatchSet(ImagePath, Resize, PatchSize, MaxPerturbation, Tolerance, S
     HC_A = np.delete(HC_A, 2, 1)
 
     Test = C_A + H4
+
+    # print("H4", H4)
+    # print("H_AB", H_AB)
 
     if(Visualize):
         # ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(Boundary)], True, (255, 255, 255), 2)
@@ -83,8 +87,54 @@ def generatePatchSet(ImagePath, Resize, PatchSize, MaxPerturbation, Tolerance, S
         cv2.imwrite(os.path.join(SavePath, 'PatchA', '%d.png'%PatchCount), PatchA)
         cv2.imwrite(os.path.join(SavePath, 'PatchB', '%d.png'%PatchCount), PatchB)
 
-    return PatchStack, H_AB, H4
+    return PatchStack, H4, H_AB, rho
 
+
+def generateResult(ImageA, H4, H_AB, Resize, PatchSize, MaxPerturbation, Visualize):
+
+    ImageA = cv2.resize(cv2.imread(ImageA), (int(Resize[1]), int(Resize[0])), interpolation=cv2.INTER_CUBIC) # Input ImageA
+        
+    H_BA = np.linalg.inv(H_AB)
+    ImageB = cv2.warpPerspective(ImageA, H_BA, (ImageA.shape[1], ImageA.shape[0])) # ImageA warped with respect to H_BA
+
+    P_xmin = int((PatchSize[0]/2 + MaxPerturbation))
+    P_xmax = int(Resize[0] - (PatchSize[0]/2 + MaxPerturbation))
+    P_ymin = int((PatchSize[1]/2 + MaxPerturbation))
+    P_ymax = int(Resize[1] - (PatchSize[1]/2 + MaxPerturbation))
+    P = [random.randint(P_xmin, P_xmax), random.randint(P_ymin, P_ymax)] # Random patch center [row, column]
+
+    C_A = np.float32([[P[1]-PatchSize[1]/2, P[0]-PatchSize[0]/2],
+                     [P[1]-PatchSize[1]/2, P[0]+PatchSize[0]/2],
+                     [P[1]+PatchSize[1]/2, P[0]+PatchSize[0]/2],
+                     [P[1]+PatchSize[1]/2, P[0]-PatchSize[0]/2]]).reshape(-1, 2) # Corners of the patch [column, row]
+    C_A -= 1
+
+    # print("C_A", C_A)
+
+    # print("H4", H4)
+
+    C_B = C_A + H4
+
+    # print("C_B", C_B)
+
+    HC_A = np.dot(H_BA, np.vstack((C_A[:,0], C_A[:,1], np.ones([1,len(C_A)]))))
+    HC_A = np.array(HC_A/(HC_A[2]+1e-20)).transpose()
+    HC_A = np.delete(HC_A, 2, 1)
+
+    Test = C_A + H4
+
+    if(Visualize):
+        ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(C_A)], True, (255, 0, 0), 2)
+        ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(C_B)], True, (255, 0, 0), 2)
+        ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(HC_A)], True, (0, 255, 0), 2)
+        Result = np.hstack((ImageA, ImageB))
+ 
+        cv2.imshow("ImageA", ImageA)
+        cv2.imshow("ImageB", ImageB)
+        cv2.imshow("Result", Result)
+        cv2.waitKey(0)
+
+    return Result
 
 def generateDataset(DatasetPath, Resize, PatchSize, MaxPerturbation, Tolerance, NumPatches, SavePatches, SavePath, Visualize):
 
@@ -97,11 +147,37 @@ def generateDataset(DatasetPath, Resize, PatchSize, MaxPerturbation, Tolerance, 
         os.makedirs(SavePath, exist_ok=True)
         print("Saving genereated patches to: %s"%SavePath)
 
+    H4_data = np.empty([0, 4, 2])
+    H_AB_data = np.empty([0, 3, 3])
+    rho_data = np.empty([0, 4, 1])
+
     PatchCount = 1
     for img in tqdm(range(1, len(DatasetPath)+1)):
         for patch in range(1, PatchePerImage+1):
-            generatePatchSet(DatasetPath[img-1], Resize, PatchSize, MaxPerturbation, Tolerance, SavePatches, SavePath, PatchCount, Visualize)
+            PatchSet, H4, H_AB, rho = generatePatchSet(DatasetPath[img-1], Resize, PatchSize, MaxPerturbation, Tolerance, SavePatches, SavePath, PatchCount, Visualize)
+            H4_data = np.insert(H4_data, PatchCount-1, H4, axis=0)
+            H_AB_data = np.insert(H_AB_data, PatchCount-1, H_AB, axis=0)
+            rho_data = np.insert(rho_data, PatchCount-1, rho, axis=0)
             PatchCount += 1
+
+    with open (os.path.join(SavePath, 'H4.npy'), 'wb') as f:
+        np.save(f, H4_data)
+    with open (os.path.join(SavePath, 'H_AB.npy'), 'wb') as f:
+        np.save(f, H_AB_data)
+    with open (os.path.join(SavePath, 'rho.npy'), 'wb') as f:
+        np.save(f, rho_data)
+
+    with open (os.path.join(SavePath, 'H4.npy'), 'rb') as f:
+        H4_data_test = np.load(f)
+    with open (os.path.join(SavePath, 'H_AB.npy'), 'rb') as f:
+        H_AB_data_test = np.load(f)
+    with open (os.path.join(SavePath, 'rho.npy'), 'rb') as f:
+        rho_data_test = np.load(f)
+
+    print("H4 Data Test", H4_data_test)
+    print("H_AB Data Test", H_AB_data_test)
+    print("rho Data Test", rho_data_test)
+
 
 def main():
     Parser = argparse.ArgumentParser()
