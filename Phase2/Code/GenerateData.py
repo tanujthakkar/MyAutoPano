@@ -11,6 +11,7 @@ import argparse
 from PIL import Image
 import random
 from datetime import datetime
+import tensorflow as tf
 
 from Helper import *
 from Misc.MiscUtils import *
@@ -123,18 +124,18 @@ def generateResult(ImageA, H4, H_AB, Resize, PatchSize, MaxPerturbation, Visuali
 
     Test = C_A + H4
 
-    if(Visualize):
-        ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(C_A)], True, (255, 0, 0), 2)
-        ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(C_B)], True, (255, 0, 0), 2)
-        ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(HC_A)], True, (0, 255, 0), 2)
-        Result = np.hstack((ImageA, ImageB))
+    ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(C_A)], True, (255, 0, 0), 2)
+    ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(C_B)], True, (255, 0, 0), 2)
+    ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(HC_A)], True, (0, 255, 0), 2)
+    Result = np.hstack((ImageA, ImageB))
  
+    if(Visualize):
         cv2.imshow("ImageA", ImageA)
         cv2.imshow("ImageB", ImageB)
         cv2.imshow("Result", Result)
         cv2.waitKey(0)
 
-    return Result
+    return np.uint8(Result)
 
 def generateDataset(DatasetPath, Resize, PatchSize, MaxPerturbation, Tolerance, NumPatches, SavePatches, SavePath, Visualize):
 
