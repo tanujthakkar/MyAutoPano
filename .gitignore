@@ -1,0 +1,12 @@
+Phase2/project1/bin
+Phase2/project1/include
+Phase2/project1/lib
+Phase2/project1/lib64
+Phase2/project1/share
+Phase2/project1/checkpoints
+Phase2/project1/Patches.zip
+Phase2/project1/data
+Phase2/project1/src/__pycache__
+Phase2/project1/src/network/__pycache__
+Phase2/project1/pip-selfcheck.json
+Phase2/project1/pyvenv.cfg
