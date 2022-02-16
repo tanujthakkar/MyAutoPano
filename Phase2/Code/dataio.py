@@ -7,6 +7,7 @@ from skimage.io import imread
 
 
 class HomographyDataset(Dataset):
+    
     def __init__(self, base_path):
         super().__init__()
         self.base_path = base_path

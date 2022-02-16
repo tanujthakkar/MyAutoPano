@@ -1,86 +1,52 @@
-#!/usr/env/bin python3
+'''
+Implementation of homography network as formulated in https://arxiv.org/abs/1606.03798
 
-# Importing modules
-import tensorflow as tf
-from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPool2D, Dropout, Flatten, Dense
-import sys
-import numpy as np
-
-from tensorflow.keras.models import Model
-
-# Don't generate pyc codes
-sys.dont_write_bytecode = True
+Author: Aneesh Dandime
+Email: aneeshd@umd.edu
+'''
+import torch.nn as nn
+from torchsummary import summary
 
 
-def HomographyNet(InputShape=(128,128,2), Filters=64, KernelSize=(3,3), PoolSize=(2,2), Strides=2):
-    '''
-        Convolutional Neural Network (CNN) based on the HomographyNet put forward in - https://arxiv.org/pdf/1606.03798.pdf
-    '''
-
-    inputs = Input(shape=InputShape)
-
-    x = Conv2D(filters=Filters, kernel_size=KernelSize, padding='same')(inputs)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
+class HomographyNet(nn.Module):
+    def __init__(self) -> None:
+        super(HomographyNet, self).__init__()
+        self.layer1 = self.__make_layer(2, 64, pool=False)
+        self.layer2 = self.__make_layer(64, 64)
+        self.layer3 = self.__make_layer(64, 64, pool=False)
+        self.layer4 = self.__make_layer(64, 64)
+        self.layer5 = self.__make_layer(64, 128, pool=False)
+        self.layer6 = self.__make_layer(128, 128)
+        self.layer7 = self.__make_layer(128, 128, pool=False)
+        self.layer8 = self.__make_layer(128, 128, pool=False)
+        self.fc1 = nn.Linear(32768, 1024)
+        self.fc2 = nn.Linear(1024, 8)
     
-    x = Conv2D(filters=Filters, kernel_size=KernelSize, padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = MaxPool2D(pool_size=PoolSize, strides=Strides, padding='same')(x)
-
-
-    x = Conv2D(filters=Filters, kernel_size=KernelSize, padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
+    def __make_layer(self, in_channels, out_channels, kernel_size=3, pool=True):
+        layers = []
+        layers.append(nn.Conv2d(in_channels, out_channels, kernel_size, padding='same'))
+        layers.append(nn.BatchNorm2d(out_channels))
+        layers.append(nn.ReLU())
+        if pool:
+            layers.append(nn.MaxPool2d(2))
+        return nn.Sequential(*layers)
     
-    x = Conv2D(filters=Filters, kernel_size=KernelSize, padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = MaxPool2D(pool_size=PoolSize, strides=Strides, padding='same')(x)
-
-
-    x = Conv2D(filters=Filters*2, kernel_size=KernelSize, padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    
-    x = Conv2D(filters=Filters*2, kernel_size=KernelSize, padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = MaxPool2D(pool_size=PoolSize, strides=Strides, padding='same')(x)
-
-
-    x = Conv2D(filters=Filters*2, kernel_size=KernelSize, padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    
-    x = Conv2D(filters=Filters*2, kernel_size=KernelSize, padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Flatten()(x)
-
-    x = Dropout(0.5)(x)
-
-    x = Dense(1024, activation='relu')(x)
-
-    x = Dropout(0.5)(x)
-
-    x = Dense(8)(x)
-
-    outputs = x
-
-    model = Model(inputs=inputs, outputs=outputs, name='HomographyNet')
-
-    return model
-
-
-def main():
-    HM = HomographyNet()
-    HM.summary()
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.layer5(x)
+        x = self.layer6(x)
+        x = self.layer7(x)
+        x = self.layer8(x)
+        x = x.view(-1, 32768)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        return x
 
 
 if __name__ == '__main__':
-    main()
+    model = HomographyNet()
+    summary(model, (2, 128, 128))
+
