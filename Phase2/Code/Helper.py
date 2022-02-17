@@ -1,13 +1,7 @@
-#!/usr/env/bin python3
-
-# Importing modules
-import cv2
 import numpy as np
 import os
 import re
 from PIL import Image
-import tensorflow.keras.backend as K
-import tensorflow as tf
 
 
 def readImageSet(ImageSet):
@@ -38,7 +32,7 @@ def save_image(np_arr, path):
 
 def remap(x, oMin, oMax, iMin, iMax):
     # Taken from https://stackoverflow.com/questions/929103/convert-a-number-range-to-another-range-maintaining-ratios
-    #range check
+    # range check
     if oMin == oMax:
         print("Warning: Zero input range")
         return None
@@ -59,12 +53,6 @@ def preprocess_H4_data(H4, rho=32):
 def deprocess_H4_data(H4, rho=32):
     H4 = remap(H4, -rho, rho, -1.0, 1.0)
     return np.int32(H4.reshape(4,2))
-
-def L2_loss(y_true, y_pred):
-    # return tf.reduce_mean(tf.reduce_sum((y_pred - y_true)**2, axis=1), axis=1)
-    # return tf.math.sqrt(tf.reduce_sum((tf.math.squared_difference(y_pred, y_true))))
-    return K.mean((y_pred-y_true)**2)
-    # return tf.reduce_sum((y_pred - y_true)**2)/8
 
 def main():
     print(remap(9.125, -1.0, 1.0, -32, 32))

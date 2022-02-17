@@ -27,9 +27,9 @@ def l2_loss(out, gt):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-bp', '--base_path', default='../data/Patches', help='Base path for images. Default: \'../data/Patches\'')
+    parser.add_argument('-bp', '--base_path', default='../Data/Patches', help='Base path for images. Default: \'../Data/Patches\'')
     parser.add_argument('-cb', '--checkpoint_base', default='../checkpoints', help='Base path to save checkpoints. Default: \'../checkpoints\'')
-    parser.add_argument('--dataset_path', default='../data/', help='Path to the full training dataset')
+    parser.add_argument('--dataset_path', default='../Data/', help='Path to the full training dataset')
     parser.add_argument('-e', '--epochs', type=int, default=200, help='Number of epochs to train Default: 200')
     parser.add_argument('-etc', '--epochs_till_chkpt', type=int, default=10, help='Checkpoint is saved after these many epochs. Default: 10')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='Size of batch. Default: 32')
@@ -67,7 +67,7 @@ def main():
     loss_fn = nn.MSELoss()
     # optimizer = optim.Adam(model.parameters(), lr=lr)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, 30, 0.1)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, 38, 0.1)
 
     if os.path.isdir(checkpoint_path):
         shutil.rmtree(checkpoint_path)
@@ -96,6 +96,8 @@ def main():
 
     epoch_losses = []
     val_losses = []
+    iters_train = len(train_dataset) / batch_size
+    iters_val = len(val_dataset) / batch_size
     for epoch in range(epochs):
         epoch_loss = 0.0
         for data in tqdm(train_dataloader):
@@ -131,11 +133,11 @@ def main():
             model.train()
 
         scheduler.step()
-        epoch_losses.append(epoch_loss)
-        print(f'Epoch {epoch + 1} (finished) loss: {epoch_loss}')
+        epoch_losses.append(epoch_loss / iters_train)
+        print(f'Epoch {epoch + 1} (finished) loss: {epoch_loss / iters_train}')
 
-        val_losses.append(val_loss)
-        print(f'Epoch {epoch + 1} (finished) Validation loss: {val_loss}')
+        val_losses.append(val_loss / iters_val)
+        print(f'Epoch {epoch + 1} (finished) Validation loss: {val_loss / iters_val}')
 
         if epoch % epochs_till_chkpt == 0 and epoch != epochs - 1:
             torch.save(model.state_dict(), os.path.join(checkpoint_path, f'model_{epoch}.pth'))

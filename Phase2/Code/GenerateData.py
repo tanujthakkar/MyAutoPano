@@ -11,10 +11,8 @@ import argparse
 from PIL import Image
 import random
 from datetime import datetime
-import tensorflow as tf
 
 from Helper import *
-from Misc.MiscUtils import *
 
 sys.dont_write_bytecode = True
 
@@ -104,7 +102,7 @@ def generateResult(ImageA, H4, H_AB, Resize, PatchSize, MaxPerturbation, Visuali
     P_xmax = int(Resize[0] - (PatchSize[0]/2 + MaxPerturbation))
     P_ymin = int((PatchSize[1]/2 + MaxPerturbation))
     P_ymax = int(Resize[1] - (PatchSize[1]/2 + MaxPerturbation))
-    P = [random.randint(P_xmin, P_xmax), random.randint(P_ymin, P_ymax)] # Random patch center [row, column]
+    P = [(P_xmin + P_xmax) // 2, (P_ymin + P_ymax) // 2] # Random patch center [row, column]
 
     C_A = np.float32([[P[1]-PatchSize[1]/2, P[0]-PatchSize[0]/2],
                      [P[1]-PatchSize[1]/2, P[0]+PatchSize[0]/2],
