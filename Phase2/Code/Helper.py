@@ -61,10 +61,11 @@ def deprocess_H4_data(H4, rho=32):
     return np.int32(H4.reshape(4,2))
 
 def L2_loss(y_true, y_pred):
-    # return tf.reduce_mean(tf.reduce_sum((y_pred - y_true)**2, axis=1), axis=1)
+    # print(tf.reduce_sum((y_pred - y_true)**2, axis=0))
     # return tf.math.sqrt(tf.reduce_sum((tf.math.squared_difference(y_pred, y_true))))
-    return K.mean((y_pred-y_true)**2)
+    # return K.mean((y_pred-y_true)**2)
     # return tf.reduce_sum((y_pred - y_true)**2)/8
+    return tf.reduce_mean(tf.reduce_sum((y_pred - y_true)**2, axis=1))
 
 def main():
     print(remap(9.125, -1.0, 1.0, -32, 32))
