@@ -102,7 +102,7 @@ def generateResult(ImageA, H4, H_AB, Resize, PatchSize, MaxPerturbation, Visuali
     P_xmax = int(Resize[0] - (PatchSize[0]/2 + MaxPerturbation))
     P_ymin = int((PatchSize[1]/2 + MaxPerturbation))
     P_ymax = int(Resize[1] - (PatchSize[1]/2 + MaxPerturbation))
-    P = [random.randint(P_xmin, P_xmax), random.randint(P_ymin, P_ymax)] # Random patch center [row, column]
+    P = [(P_xmin + P_xmax) // 2, (P_ymin + P_ymax) // 2] # Center Patch [row, column]
 
     C_A = np.float32([[P[1]-PatchSize[1]/2, P[0]-PatchSize[0]/2],
                      [P[1]-PatchSize[1]/2, P[0]+PatchSize[0]/2],
@@ -110,19 +110,13 @@ def generateResult(ImageA, H4, H_AB, Resize, PatchSize, MaxPerturbation, Visuali
                      [P[1]+PatchSize[1]/2, P[0]-PatchSize[0]/2]]).reshape(-1, 2) # Corners of the patch [column, row]
     C_A -= 1
 
-    # print("C_A", C_A)
+    # H4 = C_B - C_A
+    
+    C_B = C_A + H4 # Predicted C_B [Blue Box]
 
-    # print("H4", H4)
-
-    C_B = C_A + H4
-
-    # print("C_B", C_B)
-
-    HC_A = np.dot(H_BA, np.vstack((C_A[:,0], C_A[:,1], np.ones([1,len(C_A)]))))
+    HC_A = np.dot(H_BA, np.vstack((C_A[:,0], C_A[:,1], np.ones([1,len(C_A)])))) # Ground Truth C_B [Green Box]
     HC_A = np.array(HC_A/(HC_A[2]+1e-20)).transpose()
     HC_A = np.delete(HC_A, 2, 1)
-
-    Test = C_A + H4
 
     ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(C_A)], True, (255, 0, 0), 2)
     ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(C_B)], True, (255, 0, 0), 2)
