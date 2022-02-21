@@ -109,23 +109,33 @@ def generateResult(ImageA, H4, H_AB, Resize, PatchSize, MaxPerturbation, Visuali
                      [P[1]+PatchSize[1]/2, P[0]+PatchSize[0]/2],
                      [P[1]+PatchSize[1]/2, P[0]-PatchSize[0]/2]]).reshape(-1, 2) # Corners of the patch [column, row]
     C_A -= 1
-
-    # H4 = C_B - C_A
     
-    C_B = C_A + H4 # Predicted C_B [Blue Box]
+    C_B_ = C_A + H4 # Predicted C_B [Perturbed Patch]
 
-    HC_A = np.dot(H_BA, np.vstack((C_A[:,0], C_A[:,1], np.ones([1,len(C_A)])))) # Ground Truth C_B [Green Box]
+    HC_A = np.dot(H_BA, np.vstack((C_A[:,0], C_A[:,1], np.ones([1,len(C_A)])))) # Ground Truth C_A in Image B [Green Box]
     HC_A = np.array(HC_A/(HC_A[2]+1e-20)).transpose()
     HC_A = np.delete(HC_A, 2, 1)
 
+    H_AB_ = cv2.getPerspectiveTransform(np.float32(C_A), np.float32(C_B_)) # Predicted Homography from C_A to C_B
+    H_BA_ = np.linalg.inv(H_AB_) # Predicted from C_B to C_A
+
+    HC_A_ = np.dot(H_BA_, np.vstack((C_A[:,0], C_A[:,1], np.ones([1,len(C_A)])))) # Predicted C_A in ImageB [Blue Box]
+    HC_A_ = np.array(HC_A_/(HC_A_[2]+1e-20)).transpose()
+    HC_A_ = np.delete(HC_A_, 2, 1)
+    
+    # ImageA_ = cv2.warpPerspective(ImageB, H_AB_, (ImageA.shape[1], ImageA.shape[0]))
+    # ImageB_ = cv2.warpPerspective(ImageA, H_BA_, (ImageA.shape[1], ImageA.shape[0]))
+
     ImageA = cv2.polylines(np.uint8(ImageA), [np.int32(C_A)], True, (255, 0, 0), 2)
-    ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(C_B)], True, (255, 0, 0), 2)
     ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(HC_A)], True, (0, 255, 0), 2)
+    ImageB = cv2.polylines(np.uint8(ImageB), [np.int32(HC_A_)], True, (255, 0, 0), 2)
     Result = np.hstack((ImageA, ImageB))
  
     if(Visualize):
         cv2.imshow("ImageA", ImageA)
         cv2.imshow("ImageB", ImageB)
+        # cv2.imshow("ImageA_", ImageA_)
+        # cv2.imshow("ImageB_", ImageB_)
         cv2.imshow("Result", Result)
         cv2.waitKey(0)
 
@@ -177,14 +187,14 @@ def generateDataset(DatasetPath, Resize, PatchSize, MaxPerturbation, Tolerance, 
 def main():
     Parser = argparse.ArgumentParser()
     Parser.add_argument('--DatasetPath', type=str, default="../Data/Train/", help='Path of the ImageA Dataset')
-    Parser.add_argument('--Resize', default=[240, 320], help='Target size of genereate images (height, width)')
-    Parser.add_argument('--PatchSize', default=[128, 128], help='Target size of the generated patches')
+    Parser.add_argument('--Resize', default="[240, 320]", help='Target size of genereate images (height, width)')
+    Parser.add_argument('--PatchSize', default="[128, 128]", help='Target size of the generated patches')
     Parser.add_argument('--MaxPerturbation', type=int, default=32, help='Maximum perturbation to generate random homography estimates')
     Parser.add_argument('--Tolerance', type=int, default=10, help='Tolerance of patch center selection')
     Parser.add_argument('--NumPatches', type=int, default=50000, help='Total number of patches to be generated')
-    Parser.add_argument('--SavePatches', type=bool, default=False, help='Toggle to save generated patches')
+    Parser.add_argument('--SavePatches', action='store_true', help='Toggle to save generated patches')
     Parser.add_argument('--SavePath', type=str, default="../Data/Patches/Train", help='Path to store the generated patches')
-    Parser.add_argument('--GenerateDataset', type=bool, default=False, help='Toggle to generate dataset or single patch set')
+    Parser.add_argument('--GenerateDataset', action='store_true', help='Toggle to generate dataset or single patch set')
     Parser.add_argument('--Visualize', type=bool, default=False, help='Toggle to visualize outputs')
 
     Args = Parser.parse_args()
