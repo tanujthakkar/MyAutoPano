@@ -25,8 +25,8 @@ from Helper import *
 from Misc.MiscUtils import *
 from GenerateData import *
 
-from tensorflow.python.ops.numpy_ops import np_config
-np_config.enable_numpy_behavior()
+# from tensorflow.python.ops.numpy_ops import np_config
+# np_config.enable_numpy_behavior()
 
 
 class TrainSupervised():
@@ -169,7 +169,7 @@ class TrainSupervised():
         self.PatchA_training_data = readImageSet(os.path.join(self.DatasetPath, 'Train', 'PatchA')) # Getting relative paths to PatchA training images
         self.PatchB_training_data = readImageSet(os.path.join(self.DatasetPath, 'Train', 'PatchB')) # Gettings relative paths to PatchB training images
         with open (os.path.join(self.DatasetPath, 'Train', 'H4.npy'), 'rb') as f:
-            self.H4_training_data = np.load(f)
+            self.H4_training_data = np.load (f)
         with open (os.path.join(self.DatasetPath, 'Train', 'H_AB.npy'), 'rb') as f:
             self.H_AB_training_data = np.load(f)
         # print(H4_training_data, H4_training_data.shape)
