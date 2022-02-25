@@ -2,6 +2,7 @@
 
 # Importing modules
 from difflib import Match
+from xml.dom import UserDataHandler
 import cv2
 from cv2 import RANSAC
 from matplotlib.pyplot import axis
@@ -19,7 +20,7 @@ from Helper import *
 
 class MyAutoPano():
 
-    def __init__(self, ImageSetPath, NumFeatures, ResultPath, TestName, UseHarris=False, ImageSetHeight=None, ImageSetWidth=None):
+    def __init__(self, ImageSetPath, NumFeatures, ResultPath, TestName, ImageSetHeight=None, ImageSetWidth=None):
         self.ImageCount = 0
         self.ImageSetPath = ImageSetPath
         self.ResultPath = ResultPath
@@ -33,6 +34,7 @@ class MyAutoPano():
             self.ImageSetResize = True
             self.ImageSetHeight = ImageSetHeight
             self.ImageSetWidth = ImageSetWidth
+        # print(ImageSetHeight, ImageSetWidth)
         self.ImageSet = list()
         self.ImageSetGray = list()
         self.Inliers = np.empty([0, 0, 1])
@@ -43,7 +45,6 @@ class MyAutoPano():
 
         # Toggles
         self.Visualize = False
-        self.UseHarris = UseHarris
 
     def createImageSet(self):
         if(self.ImageSetResize):
@@ -68,8 +69,8 @@ class MyAutoPano():
         if(Visualize):
             cv2.imshow("Harris Corners", HarrisCorners)
             cv2.imshow("Corner Score", np.float32(CornerScore))
-            # cv2.imwrite(self.ResultPath + self.TestName + '_Harris_' + str(self.ImageCount) + '.png', HarrisCorners)
-            # cv2.waitKey(0)
+            cv2.imwrite(self.ResultPath + self.TestName + '_Harris_' + str(self.ImageCount) + '.png', HarrisCorners)
+            cv2.waitKey(3)
 
         return CornerScore, HarrisCorners
 
@@ -91,8 +92,8 @@ class MyAutoPano():
         if(Visualize):
             cv2.imshow("Shi-Tomasi Corners", ImageSetShiTomasiCorners)
             cv2.imshow("Corners", ShiTomasiCorners)
-            # cv2.imwrite(self.ResultPath + self.TestName + '_Shi-Tomasi_' + str(self.ImageCount) + '.png', ImageSetShiTomasiCorners)
-            # cv2.waitKey(0)
+            cv2.imwrite(self.ResultPath + self.TestName + '_Shi-Tomasi_' + str(self.ImageCount) + '.png', ImageSetShiTomasiCorners)
+            cv2.waitKey(3)
 
         return ShiTomasiCorners, ImageSetShiTomasiCorners
 
@@ -100,10 +101,7 @@ class MyAutoPano():
         print("Applying ANMS...")
 
         ANMSCorners = list()
-        if(self.UseHarris):
-            local_maximas = peak_local_max(ImageCorners, min_distance=5)
-        else:
-            local_maximas = peak_local_max(ImageCorners, min_distance=1)
+        local_maximas = peak_local_max(ImageCorners, min_distance=1)
         local_maximas = np.int0(local_maximas)
         print("Local Maximas: %d"%len(local_maximas))
 
@@ -138,8 +136,8 @@ class MyAutoPano():
         if(Visualize):
             cv2.imshow("Local Max", ImageSetLocalMaxima)
             cv2.imshow("ANMS", ImageSetANMS)
-            # cv2.imwrite(self.ResultPath + self.TestName + '_ANMS_' + str(self.ImageCount) + '.png', ImageSetANMS)
-            # cv2.waitKey(0)
+            cv2.imwrite(self.ResultPath + self.TestName + '_ANMS_' + str(self.ImageCount) + '.png', ImageSetANMS)
+            cv2.waitKey(3)
 
         return ANMSCorners, ImageSetLocalMaxima, ImageSetANMS
 
@@ -159,7 +157,7 @@ class MyAutoPano():
                 cv2.imshow("Feature", temp)
                 cv2.imshow("Patch", patch)
                 cv2.imshow("Patch gauss", patch_gauss)
-                # cv2.waitKey(0)
+                # cv2.waitKey(3)
 
         features = np.array(features)
 
@@ -199,16 +197,15 @@ class MyAutoPano():
             
             matches.append([ANMSCorners0[i][1], ANMSCorners0[i][2], SSDs[0][1], SSDs[0][2]])
 
+            temp = cv2.circle(temp,(int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])),2,(0,0,255),-1)
+            temp = cv2.circle(temp,(int(SSDs[0][2])+Image1.shape[1], int(SSDs[0][1])),2,(0,0,255),-1)
+            temp = cv2.line(temp, (int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])), (int(SSDs[0][2])+Image1.shape[1], int(SSDs[0][1])), (0,255,0), 1)
             if(Visualize):
-                temp = cv2.circle(temp,(int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])),2,(0,0,255),-1)
-                temp = cv2.circle(temp,(int(SSDs[0][2])+Image1.shape[1], int(SSDs[0][1])),2,(0,0,255),-1)
-                temp = cv2.line(temp, (int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])), (int(SSDs[0][2])+Image1.shape[1], int(SSDs[0][1])), (0,255,0), 1)
                 cv2.imshow("Matches", temp)
-            
-                # cv2.imwrite(self.ResultPath + self.TestName + '_Matches_' + str(self.ImageCount) + '.png', temp)
+                cv2.imwrite(self.ResultPath + self.TestName + '_Matches_' + str(self.ImageCount) + '.png', temp)
 
-        # if(Visualize):
-            # cv2.waitKey(0)
+        if(Visualize):
+            cv2.waitKey(3)
 
         print("Matches: %d"%len(matches))
 
@@ -265,23 +262,23 @@ class MyAutoPano():
 
         print("Inliers: %d"%max_inliers)
 
+        if(Image0.shape != Image1.shape):
+            temp_shape = np.vstack((Image0.shape, Image1.shape)).max(axis=0)
+            Image0_ = np.uint8(np.empty(temp_shape))
+            Image1_ = np.uint8(np.empty(temp_shape))
+            Image0_[0:Image0.shape[0],0:Image0.shape[1]] = Image0
+            Image1_[0:Image1.shape[0],0:Image1.shape[1]] = Image1
+            temp = np.hstack((Image0_, Image1_))
+        else:
+            print('test')
+            temp = np.hstack((Image0, Image1))
+        for i in Inliers[0]:
+            temp = cv2.circle(temp,(int(Matches[i][1]), int(Matches[i][0])),2,(0,0,255),-1)
+            temp = cv2.circle(temp,(int(Matches[i][3])+Image1.shape[1], int(Matches[i][2])),2,(0,0,255),-1)
+            temp = cv2.line(temp, (int(Matches[i][1]), int(Matches[i][0])), (int(Matches[i][3])+Image1.shape[1], int(Matches[i][2])), (0,255,0), 1)
         if(Visualize):
-            if(Image0.shape != Image1.shape):
-                temp_shape = np.vstack((Image0.shape, Image1.shape)).max(axis=0)
-                Image0_ = np.uint8(np.empty(temp_shape))
-                Image1_ = np.uint8(np.empty(temp_shape))
-                Image0_[0:Image0.shape[0],0:Image0.shape[1]] = Image0
-                Image1_[0:Image1.shape[0],0:Image1.shape[1]] = Image1
-                temp = np.hstack((Image0_, Image1_))
-            else:
-                print('test')
-                temp = np.hstack((Image0, Image1))
-            for i in Inliers[0]:
-                temp = cv2.circle(temp,(int(Matches[i][1]), int(Matches[i][0])),2,(0,0,255),-1)
-                temp = cv2.circle(temp,(int(Matches[i][3])+Image1.shape[1], int(Matches[i][2])),2,(0,0,255),-1)
-                temp = cv2.line(temp, (int(Matches[i][1]), int(Matches[i][0])), (int(Matches[i][3])+Image1.shape[1], int(Matches[i][2])), (0,255,0), 1)
             cv2.imshow("RANSAC", temp)
-            # cv2.waitKey(0)
+            cv2.waitKey(3)
 
         self.Homography = np.insert(self.Homography, len(self.Homography), np.array([best_H]), axis=0)
 
@@ -338,7 +335,7 @@ class MyAutoPano():
         if(Visualize):
             # cv2.imshow("Image0_", Image0_Warped)
             cv2.imshow("Stiched", ImageStitched)
-            # cv2.waitKey(0)
+            # cv2.waitKey(3)
 
         return ImageStitched
     
@@ -367,25 +364,17 @@ class MyAutoPano():
         # if(half == 0):
             # half = 1
             
-        print("Use Harris: ", self.UseHarris)
-
         for i in range(half+1):
 
             for img in range(len(ImageSet)-1):
                 print("Stitching Frames %d & %d"%(img*(i+1), img*(i+1)+1))
 
-                if(self.UseHarris):
-                    Corners0, Corners_0 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-                else:
-                    Corners0, Corners_0 = self.computeShiTomasiCorners(ImageSet[img], True)
-                ANMSCorners0, _, ANMS_0 = self.ANMS(ImageSet[img], Corners0, True)
+                ShiTomasiCorners0, Corners_0 = self.computeShiTomasiCorners(ImageSet[img], True)
+                ANMSCorners0, _, ANMS_0 = self.ANMS(ImageSet[img], ShiTomasiCorners0, True)
                 Features0 = self.featureDescriptor(ImageSet[img], ANMSCorners0, False)
 
-                if(self.UseHarris):
-                    Corners1, Corners_1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-                else:
-                    Corners1, Corners_1 = self.computeShiTomasiCorners(ImageSet[img], True)
-                ANMSCorners1, _, ANMS_1 = self.ANMS(ImageSet[img+1], Corners1, True)
+                ShiTomasiCorners1, Corners_1 = self.computeShiTomasiCorners(ImageSet[img+1], True)
+                ANMSCorners1, _, ANMS_1 = self.ANMS(ImageSet[img+1], ShiTomasiCorners1, True)
                 Features1 = self.featureDescriptor(ImageSet[img+1], ANMSCorners1, False)
 
                 Matches, Matches_ = self.featureMatching(ImageSet[img], ImageSet[img+1], Features0, Features1, ANMSCorners0, ANMSCorners1, True)
@@ -417,18 +406,12 @@ class MyAutoPano():
             for img in range(len(ImageSet)-1):
                 print("Stitching Frames %d & %d"%(img*(i+1), img*(i+1)+1))
 
-                if(self.UseHarris):
-                    Corners0, Corners_0 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-                else:
-                    Corners0, Corners_0 = self.computeShiTomasiCorners(ImageSet[img], True)
-                ANMSCorners0, _, ANMS_0 = self.ANMS(ImageSet[img], Corners0, True)
+                ShiTomasiCorners0, Corners_0 = self.computeShiTomasiCorners(ImageSet[img], True)
+                ANMSCorners0, _, ANMS_0 = self.ANMS(ImageSet[img], ShiTomasiCorners0, True)
                 Features0 = self.featureDescriptor(ImageSet[img], ANMSCorners0, False)
 
-                if(self.UseHarris):
-                    Corners1, Corners_1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-                else:
-                    Corners1, Corners_1 = self.computeShiTomasiCorners(ImageSet[img+1], True)
-                ANMSCorners1, _, ANMS_1 = self.ANMS(ImageSet[img+1], Corners1, True)
+                ShiTomasiCorners1, Corners_1 = self.computeShiTomasiCorners(ImageSet[img+1], True)
+                ANMSCorners1, _, ANMS_1 = self.ANMS(ImageSet[img+1], ShiTomasiCorners1, True)
                 Features1 = self.featureDescriptor(ImageSet[img+1], ANMSCorners1, False)
 
                 Matches, Matches_ = self.featureMatching(ImageSet[img], ImageSet[img+1], Features0, Features1, ANMSCorners0, ANMSCorners1, True)
@@ -452,18 +435,13 @@ class MyAutoPano():
         PanoFirstHalf = PanoHalves[0]
         PanoSecondHalf = PanoHalves[1]
 
-        if(self.UseHarris):
-            Corners0, Corners_0 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-        else:
-            Corners0, Corners_0 = self.computeShiTomasiCorners(PanoFirstHalf, True)
-        ANMSCorners0, _, ANMS_0 = self.ANMS(PanoFirstHalf, Corners0, True)
+        ShiTomasiCorners0, Corners_0 = self.computeShiTomasiCorners(PanoFirstHalf, True)
+        ANMSCorners0, _, ANMS_0 = self.ANMS(PanoFirstHalf, ShiTomasiCorners0, True)
         Features0 = self.featureDescriptor(PanoFirstHalf, ANMSCorners0, False)
 
-        if(self.UseHarris):
-            Corners1, Corners_1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-        else:
-            Corners1, Corners_0 = self.computeShiTomasiCorners(PanoSecondHalf, True)
-        ANMSCorners1, _, ANMS_1 = self.ANMS(PanoSecondHalf, Corners1, True)
+        # HarrisCorners1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+        ShiTomasiCorners1, Corners_0 = self.computeShiTomasiCorners(PanoSecondHalf, True)
+        ANMSCorners1, _, ANMS_1 = self.ANMS(PanoSecondHalf, ShiTomasiCorners1, True)
         Features1 = self.featureDescriptor(PanoSecondHalf, ANMSCorners1, False)
 
         Matches, Matches_ = self.featureMatching(PanoFirstHalf, PanoSecondHalf, Features0, Features1, ANMSCorners0, ANMSCorners1, True)
@@ -471,6 +449,3 @@ class MyAutoPano():
         I = self.stitchImages(PanoFirstHalf, PanoSecondHalf, H, True)
 
         self.saveResults(self.ImageCount, Corners_0, Corners_1, ANMS_0, ANMS_1, Matches_, RANSAC_, I)
-
-        # print(self.ResultPath + self.TestName + '_Pano.png')
-        # cv2.imwrite(self.ResultPath + self.TestName + '_Pano.png', I)
