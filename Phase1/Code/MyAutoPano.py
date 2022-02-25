@@ -3,6 +3,8 @@
 # Importing modules
 from difflib import Match
 import cv2
+from cv2 import RANSAC
+from matplotlib.pyplot import axis
 import numpy as np
 import math
 import os
@@ -17,12 +19,11 @@ from Helper import *
 
 class MyAutoPano():
 
-    def __init__(self, ImageSetPath, NumFeatures, ResultPath, ImageSetHeight=None, ImageSetWidth=None):
+    def __init__(self, ImageSetPath, NumFeatures, ResultPath, TestName, UseHarris=False, ImageSetHeight=None, ImageSetWidth=None):
         self.ImageCount = 0
         self.ImageSetPath = ImageSetPath
         self.ResultPath = ResultPath
         os.makedirs(self.ResultPath, exist_ok = True)
-        # print(self.ImageSetPath)
         self.NumFeatures = NumFeatures
         if(not ImageSetHeight and not ImageSetWidth):
             self.ImageSetResize = False
@@ -32,28 +33,19 @@ class MyAutoPano():
             self.ImageSetResize = True
             self.ImageSetHeight = ImageSetHeight
             self.ImageSetWidth = ImageSetWidth
-        # print(ImageSetHeight, ImageSetWidth)
         self.ImageSet = list()
         self.ImageSetGray = list()
-        self.ImageSetHarrisCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
-        self.ImageSetShiTomasiCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
-        self.HarrisCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth]))
-        self.ShiTomasiCorners = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth]))
-        self.ImageSetLocalMaxima = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
-        self.ImageSetANMS = np.uint8(np.empty([0, self.ImageSetHeight, self.ImageSetWidth, 3]))
-        self.ANMSCorners = np.empty([0, self.NumFeatures, 3])
-        self.Features = np.empty([0, self.NumFeatures, 64])
-        self.Matches = np.empty([0, self.NumFeatures, 4])
         self.Inliers = np.empty([0, 0, 1])
         self.Homography = np.empty([0, 1, 3, 3])
         self.BlendedImage = None
         self.ImageSetRefId = None
+        self.TestName = TestName
 
         # Toggles
         self.Visualize = False
+        self.UseHarris = UseHarris
 
     def createImageSet(self):
-        # cv2.resize(cv2.GaussianBlur(patch, (5,5), 0), None, fx=0.2, fy=0.2, interpolation=cv2.INTER_CUBIC)
         if(self.ImageSetResize):
             [self.ImageSet.append(cv2.resize(cv2.imread(self.ImageSetPath[img]), None, fx=self.ImageSetHeight, fy=self.ImageSetWidth, interpolation=cv2.INTER_CUBIC)) for img in range(len(self.ImageSetPath))] # Reading images
         else:
@@ -65,8 +57,6 @@ class MyAutoPano():
 
     def computeHarrisCorners(self, Image, Visualize):
         print("Computing Harris Corners...")
-        # self.ImageSetHarrisCorners = np.copy(self.ImageSet)
-        # for i in range(len(self.ImageSetGray)):
 
         ImageGray = cv2.cvtColor(Image, cv2.COLOR_BGR2GRAY)
         CornerScore = cv2.cornerHarris(ImageGray, 2, 3, 0.00001) # Computing corner probability using Harris corners
@@ -75,20 +65,16 @@ class MyAutoPano():
         CornerScore = cv2.dilate(CornerScore, None) # Dilating to mark corners
         HarrisCorners = np.copy(Image)
         HarrisCorners[CornerScore>0.001*CornerScore.max()]=[0,0,255] # Marking corners in RGB image
-        # self.CornerScore.append(img)
         if(Visualize):
-            # cv2.imshow("", img)
             cv2.imshow("Harris Corners", HarrisCorners)
             cv2.imshow("Corner Score", np.float32(CornerScore))
-            cv2.waitKey(0)
-        # self.CornerScore = np.float32(np.array(self.CornerScore))
+            # cv2.imwrite(self.ResultPath + self.TestName + '_Harris_' + str(self.ImageCount) + '.png', HarrisCorners)
+            # cv2.waitKey(0)
 
-        return CornerScore
+        return CornerScore, HarrisCorners
 
     def computeShiTomasiCorners(self, Image, Visualize):
         print("Computing Shi-Tomasi Corners...")
-        # self.ImageSetShiTomasiCorners = np.copy(self.ImageSet)
-        # for img in range(len(self.ImageSetGray)):
 
         ImageGray = cv2.cvtColor(Image, cv2.COLOR_BGR2GRAY)
         corners = cv2.goodFeaturesToTrack(ImageGray, self.NumFeatures, 0.01, 3) # Computing corners using the Shi-Tomasi method
@@ -100,35 +86,27 @@ class MyAutoPano():
         for corner in corners: # Marking corners in RGB image
             x,y = corner.ravel()
             ShiTomasiCorners[y,x] = 255
-            # cv2.circle(self.ImageSetShiTomasiCorners[img],(x,y),2,(0,0,255),-1)
             cv2.circle(ImageSetShiTomasiCorners,(x,y),2,(0,0,255),-1)
-
-        # self.ImageSetShiTomasiCorners = np.insert(self.ImageSetShiTomasiCorners, len(self.ImageSetShiTomasiCorners), ImageSetShiTomasiCorners, axis=0)
-        # self.ShiTomasiCorners = np.insert(self.ShiTomasiCorners, len(self.ShiTomasiCorners), ShiTomasiCorners, axis=0)
 
         if(Visualize):
             cv2.imshow("Shi-Tomasi Corners", ImageSetShiTomasiCorners)
             cv2.imshow("Corners", ShiTomasiCorners)
-            cv2.waitKey(0)
+            # cv2.imwrite(self.ResultPath + self.TestName + '_Shi-Tomasi_' + str(self.ImageCount) + '.png', ImageSetShiTomasiCorners)
+            # cv2.waitKey(0)
 
-        # self.ShiTomasiCorners = np.array(self.ShiTomasiCorners)
-        # print(self.ShiTomasiCorners.shape)
-
-        return ShiTomasiCorners
+        return ShiTomasiCorners, ImageSetShiTomasiCorners
 
     def ANMS(self, Image, ImageCorners, Visualize):
         print("Applying ANMS...")
 
-        # self.ImageSetLocalMaxima = np.copy(self.ImageSet)
-        # self.ImageSetANMS = np.copy(self.ImageSet)
-        # for img in range(len(ImageSetCorners)):
-
         ANMSCorners = list()
-        local_maximas = peak_local_max(ImageCorners, min_distance=1)
+        if(self.UseHarris):
+            local_maximas = peak_local_max(ImageCorners, min_distance=5)
+        else:
+            local_maximas = peak_local_max(ImageCorners, min_distance=1)
         local_maximas = np.int0(local_maximas)
         print("Local Maximas: %d"%len(local_maximas))
 
-        # print(self.NumFeatures, len(local_maximas))
         if(self.NumFeatures > len(local_maximas)):
             self.NumFeatures = len(local_maximas)
 
@@ -139,7 +117,6 @@ class MyAutoPano():
             for j in range(len(local_maximas)):
                 if(ImageCorners[local_maximas[j,0],local_maximas[j,1]] > ImageCorners[local_maximas[i,0],local_maximas[i,1]]):
                     ED = math.sqrt((local_maximas[j,0] - local_maximas[i,0])**2 + (local_maximas[j,1] - local_maximas[i,1])**2)
-                    # print(ED)
                 if(ED < r[i]):
                     r[i] = ED
             ANMSCorners.append([r[i], local_maximas[i,0], local_maximas[i,1]])
@@ -147,8 +124,6 @@ class MyAutoPano():
         ANMSCorners = sorted(ANMSCorners, reverse=True)
         ANMSCorners = np.array(ANMSCorners[:self.NumFeatures])
         print("ANMS Corners: %d"%len(ANMSCorners))
-        # self.ANMSCorners = np.insert(self.ANMSCorners, len(self.ANMSCorners), ANMSCorners, axis=0)
-        # print(self.ANMSCorners[-1])
 
         ImageSetLocalMaxima = np.copy(Image)
         ImageSetANMS = np.copy(Image)
@@ -156,29 +131,21 @@ class MyAutoPano():
         for local_maxima in local_maximas: # Marking corners in RGB image
                 y,x = local_maxima.ravel()
                 cv2.circle(ImageSetLocalMaxima,(x,y),2,(0,255,0),-1)
-                # cv2.circle(self.ImageSetANMS[img],(x,y),2,(0,255,0),-1)
 
         for i in range(self.NumFeatures): # Marking corners in RGB image
             cv2.circle(ImageSetANMS,(int(ANMSCorners[i][2]),int(ANMSCorners[i][1])),2,(0,0,255),-1)
         
-        # self.ImageSetLocalMaxima = np.insert(self.ImageSetLocalMaxima, len(self.ImageSetLocalMaxima), ImageSetLocalMaxima, axis=0)
-        # self.ImageSetANMS = np.insert(self.ImageSetANMS, len(self.ImageSetANMS), ImageSetANMS, axis=0)
-
         if(Visualize):
-            # cv2.imshow("", self.ImageSet[self.ImageCount])
             cv2.imshow("Local Max", ImageSetLocalMaxima)
             cv2.imshow("ANMS", ImageSetANMS)
-            cv2.waitKey(0)
-
-        # self.ANMSCorners = np.array(self.ANMSCorners)
-        # print(self.ANMSCorners.shape)
+            # cv2.imwrite(self.ResultPath + self.TestName + '_ANMS_' + str(self.ImageCount) + '.png', ImageSetANMS)
+            # cv2.waitKey(0)
 
         return ANMSCorners, ImageSetLocalMaxima, ImageSetANMS
 
     def featureDescriptor(self, Image, key_points, Visualize):
         print("Retrieving feature patches...")
 
-        # for img in range(len(self.ImageSetGray)):
         ImageGray = np.float32(cv2.cvtColor(Image, cv2.COLOR_BGR2GRAY))
         patch_size = 40
         features = list()
@@ -190,21 +157,16 @@ class MyAutoPano():
             if(Visualize):
                 temp = cv2.circle(np.copy(Image),(int(key_points[point][2]), int(key_points[point][1])),2,(0,0,255),-1)
                 cv2.imshow("Feature", temp)
-                # cv2.imshow("ANMS", self.ImageSetANMS[img])
                 cv2.imshow("Patch", patch)
                 cv2.imshow("Patch gauss", patch_gauss)
-                cv2.waitKey(0)
+                # cv2.waitKey(0)
 
         features = np.array(features)
-        # self.Features = np.insert(self.Features, len(self.Features), features, axis=0)
 
-        # self.Features = np.array(self.Features)
-        # print(self.Features.shape)
         return features
 
     def featureMatching(self, Image0, Image1, Features0, Features1, ANMSCorners0, ANMSCorners1, Visualize):
         print("Matching features...")
-        # for img in range(len(self.ImageSet)-1):
             
         SSDs = list()
         matches = list()
@@ -216,24 +178,12 @@ class MyAutoPano():
 
         if(Visualize):
             if(Image0.shape != Image1.shape):
-                print("Image0 shape", Image0.shape)
-                print("Image1 shape", Image1.shape)
-                if(Image0.shape > Image1.shape):
-                    temp_ = np.uint8(np.zeros(Image0.shape))
-                    print("temp_ shape", temp_.shape)
-                    temp_[0:Image1.shape[0],0:Image1.shape[1]] = Image1
-                    cv2.imshow("", temp_)
-                    cv2.waitKey(0)
-                    print("test_")
-                    temp = np.hstack((Image0, temp_))
-                else:
-                    temp_ = np.uint8(np.zeros(Image0.shape))
-                    print("temp_ shape", temp_.shape)
-                    temp_[0:Image0.shape[0],0:Image0.shape[1]] = Image0
-                    cv2.imshow("", temp_)
-                    cv2.waitKey(0)
-                    print("test_")
-                    temp = np.hstack((temp_, Image1))
+                temp_shape = np.vstack((Image0.shape, Image1.shape)).max(axis=0)
+                Image0_ = np.uint8(np.empty(temp_shape))
+                Image1_ = np.uint8(np.empty(temp_shape))
+                Image0_[0:Image0.shape[0],0:Image0.shape[1]] = Image0
+                Image1_[0:Image1.shape[0],0:Image1.shape[1]] = Image1
+                temp = np.hstack((Image0_, Image1_))
             else:
                 temp = np.hstack((Image0, Image1))
         
@@ -243,35 +193,28 @@ class MyAutoPano():
                 SSDs.append([sum((Features0[i] - Features1[j])**2), ANMSCorners1[j][1], ANMSCorners1[j][2]])
 
             SSDs = sorted(SSDs)
-            # print([self.ANMSCorners[img][i][1], self.ANMSCorners[img][i][2], SSDs[0][1], SSDs[0][2]])
 
-            # input('q')
-            # if((SSDs[0][0]/SSDs[1][0]) < 0.8):
-                # continue
+            # if((SSDs[0][0]/SSDs[1][0]) < 0.95):
+            #     continue
             
             matches.append([ANMSCorners0[i][1], ANMSCorners0[i][2], SSDs[0][1], SSDs[0][2]])
-            # input('q')
-            # features.remove(SSDs[0][1])
 
             if(Visualize):
                 temp = cv2.circle(temp,(int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])),2,(0,0,255),-1)
                 temp = cv2.circle(temp,(int(SSDs[0][2])+Image1.shape[1], int(SSDs[0][1])),2,(0,0,255),-1)
                 temp = cv2.line(temp, (int(ANMSCorners0[i][2]), int(ANMSCorners0[i][1])), (int(SSDs[0][2])+Image1.shape[1], int(SSDs[0][1])), (0,255,0), 1)
                 cv2.imshow("Matches", temp)
-                # cv2.imshow("2", temp2)
+            
+                # cv2.imwrite(self.ResultPath + self.TestName + '_Matches_' + str(self.ImageCount) + '.png', temp)
 
-        if(Visualize):
-            cv2.waitKey(0)
+        # if(Visualize):
+            # cv2.waitKey(0)
 
         print("Matches: %d"%len(matches))
 
         matches = np.array(matches)
-        # self.Matches = np.insert(self.Matches, len(self.Matches), matches, axis=0)
 
-        # self.Matches = np.array(self.Matches)
-        # print(self.Matches.shape)
-
-        return matches
+        return matches, temp
 
     def RANSAC(self, Matches, Image0, Image1, iterations, threshold, Visualize):
         print("Performing RANSAC...")
@@ -324,24 +267,12 @@ class MyAutoPano():
 
         if(Visualize):
             if(Image0.shape != Image1.shape):
-                print("Image0 shape", Image0.shape)
-                print("Image1 shape", Image1.shape)
-                if(Image0.shape > Image1.shape):
-                    temp_ = np.uint8(np.zeros(Image0.shape))
-                    print("temp_ shape", temp_.shape)
-                    temp_[0:Image1.shape[0],0:Image1.shape[1]] = Image1
-                    cv2.imshow("", temp_)
-                    cv2.waitKey(0)
-                    print("test_")
-                    temp = np.hstack((Image0, temp_))
-                else:
-                    temp_ = np.uint8(np.zeros(Image1.shape))
-                    print("temp_ shape", temp_.shape)
-                    temp_[0:Image0.shape[0],0:Image0.shape[1]] = Image0
-                    cv2.imshow("", temp_)
-                    cv2.waitKey(0)
-                    print("test_")
-                    temp = np.hstack((temp_, Image1))
+                temp_shape = np.vstack((Image0.shape, Image1.shape)).max(axis=0)
+                Image0_ = np.uint8(np.empty(temp_shape))
+                Image1_ = np.uint8(np.empty(temp_shape))
+                Image0_[0:Image0.shape[0],0:Image0.shape[1]] = Image0
+                Image1_[0:Image1.shape[0],0:Image1.shape[1]] = Image1
+                temp = np.hstack((Image0_, Image1_))
             else:
                 print('test')
                 temp = np.hstack((Image0, Image1))
@@ -349,18 +280,15 @@ class MyAutoPano():
                 temp = cv2.circle(temp,(int(Matches[i][1]), int(Matches[i][0])),2,(0,0,255),-1)
                 temp = cv2.circle(temp,(int(Matches[i][3])+Image1.shape[1], int(Matches[i][2])),2,(0,0,255),-1)
                 temp = cv2.line(temp, (int(Matches[i][1]), int(Matches[i][0])), (int(Matches[i][3])+Image1.shape[1], int(Matches[i][2])), (0,255,0), 1)
-                # print((int(self.ANMSCorners[img][i][1]), int(self.ANMSCorners[img][i][2])), (int(self.ANMSCorners[img+1][self.Matches[img][i][1]][1]), int(self.ANMSCorners[img+1][self.Matches[img][i][1]][2])))
-            cv2.imshow("", temp)
-            cv2.waitKey(0)
+            cv2.imshow("RANSAC", temp)
+            # cv2.waitKey(0)
 
-        # Inliers = np.array(Inliers[0]).reshape((-1,1))
-        # self.Inliers = np.insert(self.Inliers, len(self.Inliers), Inliers, axis=0)
         self.Homography = np.insert(self.Homography, len(self.Homography), np.array([best_H]), axis=0)
 
-        # self.Inliers = np.array(self.Inliers, dtype=object)
-        # self.Homography = np.array(self.Homography)
+        if(H is None):
+            H = best_H
 
-        return H
+        return H, temp
 
     def mean_blend(self, img1, img2):
         assert(img1.shape == img2.shape)
@@ -371,11 +299,6 @@ class MyAutoPano():
         blended2 = np.copy(img1)
         blended2[locs2[0], locs2[1]] = img2[locs2[0], locs2[1]]
         blended = cv2.addWeighted(blended1, 0, blended2, 1.0, 0)
-
-        # cv2.imshow("blended1", blended1)
-        # cv2.imshow("blended2", blended2)
-        # cv2.imshow("blended", blended)
-        # cv2.waitKey(0)
 
         return blended
 
@@ -388,9 +311,6 @@ class MyAutoPano():
         c0 = np.float32([[0, 0], [0, h0], [w0, h0], [w0, 0]]).reshape(-1, 1, 2) # Points on Image 1
         c1 = np.float32([[0, 0], [0, h1], [w1, h1], [w1, 0]]).reshape(-1, 1, 2) # Points on Image 2
 
-        # print(c0)
-        # print(c1)
-
         # print("Homography Matrix", H)
 
         c0_ = cv2.perspectiveTransform(c0, H) # Points of Image 1 transformed
@@ -399,10 +319,6 @@ class MyAutoPano():
 
         x_min, y_min = np.int0(np.min(corners, axis = 0))
         x_max, y_max = np.int0(np.max(corners, axis = 0))
-        
-        # print("min, max")
-        # print(x_min, y_min)
-        # print(x_max, y_max)
 
         H_translate = np.array([[1, 0, -x_min], [0, 1, -y_min], [0, 0, 1]]) # translate
 
@@ -422,72 +338,113 @@ class MyAutoPano():
         if(Visualize):
             # cv2.imshow("Image0_", Image0_Warped)
             cv2.imshow("Stiched", ImageStitched)
-            cv2.waitKey(0)
+            # cv2.waitKey(0)
 
         return ImageStitched
+    
+    def saveResults(self, ImageCount, Corners_0, Corners_1, ANMS_0, ANMS_1, Matches, RANSAC_, Stich):
+        cv2.imwrite(self.ResultPath + self.TestName + '_Corners_0_' + str(ImageCount) + '.png', Corners_0)
+        cv2.imwrite(self.ResultPath + self.TestName + '_Corners_1_' + str(ImageCount) + '.png', Corners_1)
+        cv2.imwrite(self.ResultPath + self.TestName + '_ANMS_0_' + str(ImageCount) + '.png', ANMS_0)
+        cv2.imwrite(self.ResultPath + self.TestName + '_ANMS_1_' + str(ImageCount) + '.png', ANMS_1)
+        cv2.imwrite(self.ResultPath + self.TestName + '_Matches_' + str(ImageCount) + '.png', Matches)
+        cv2.imwrite(self.ResultPath + self.TestName + '_RANSAC_' + str(ImageCount) + '.png', RANSAC_)
+        cv2.imwrite(self.ResultPath + self.TestName + '_Stich_' + str(ImageCount) + '.png', Stich)
 
     def generatePanorama(self, Visualize):
         print("Generating Panorama...")
 
         self.createImageSet()
         ImageSet = [x for x in self.ImageSet]
+        if(len(ImageSet)%2 != 0):
+            ImageSet = ImageSet[:len(ImageSet)//2+1]
+        else:
+            ImageSet = ImageSet[:len(ImageSet)//2]
 
         PanoHalves = list()
+
+        half = self.ImageSetRefId//2
+        # if(half == 0):
+            # half = 1
             
-        for i in range(self.ImageSetRefId//2):
-            end = (len(ImageSet)//2) - 1
-            if(end == 0):
-                end = 1
+        print("Use Harris: ", self.UseHarris)
 
-            for img in range(end):
-                print("Stitching Frames %d & %d"%(img, img+1))
+        for i in range(half+1):
 
-                ShiTomasiCorners0 = self.computeShiTomasiCorners(ImageSet[img], False)
-                ANMSCorners0, _, _ = self.ANMS(ImageSet[img], ShiTomasiCorners0, False)
+            for img in range(len(ImageSet)-1):
+                print("Stitching Frames %d & %d"%(img*(i+1), img*(i+1)+1))
+
+                if(self.UseHarris):
+                    Corners0, Corners_0 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+                else:
+                    Corners0, Corners_0 = self.computeShiTomasiCorners(ImageSet[img], True)
+                ANMSCorners0, _, ANMS_0 = self.ANMS(ImageSet[img], Corners0, True)
                 Features0 = self.featureDescriptor(ImageSet[img], ANMSCorners0, False)
 
-                ShiTomasiCorners1 = self.computeShiTomasiCorners(ImageSet[img+1], False)
-                ANMSCorners1, _, _ = self.ANMS(ImageSet[img+1], ShiTomasiCorners1, False)
+                if(self.UseHarris):
+                    Corners1, Corners_1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+                else:
+                    Corners1, Corners_1 = self.computeShiTomasiCorners(ImageSet[img], True)
+                ANMSCorners1, _, ANMS_1 = self.ANMS(ImageSet[img+1], Corners1, True)
                 Features1 = self.featureDescriptor(ImageSet[img+1], ANMSCorners1, False)
 
-                Matches = self.featureMatching(ImageSet[img], ImageSet[img+1], Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-                H = self.RANSAC(Matches, ImageSet[img], ImageSet[img+1], 500, 5, False)
-                I = self.stitchImages(ImageSet[img], ImageSet[img+1], H, False)
+                Matches, Matches_ = self.featureMatching(ImageSet[img], ImageSet[img+1], Features0, Features1, ANMSCorners0, ANMSCorners1, True)
+                H, RANSAC_ = self.RANSAC(Matches, ImageSet[img], ImageSet[img+1], 1000, 5, True)
+                if(H is not None):
+                    I = self.stitchImages(ImageSet[img], ImageSet[img+1], H, True)
+                else:
+                    print("Not enough overlap, skipping image...")
+                    continue
 
+                self.saveResults(self.ImageCount, Corners_0, Corners_1, ANMS_0, ANMS_1, Matches_, RANSAC_, I)
+                # cv2.imwrite(self.ResultPath + self.TestName + '_Stich_' + str(self.ImageCount) + '.png', I)
+                self.ImageCount += 1
                 ImageSet.append(I)
             
-            ImageSet = ImageSet[-img:]
+            ImageSet = ImageSet[-img-1:]
         
         PanoHalves.append(I)
         ImageSet.clear()
         ImageSet = [x for x in self.ImageSet]
         ImageSet.reverse()
+        if(len(ImageSet)%2 != 0):
+            ImageSet = ImageSet[:len(ImageSet)//2+1]
+        else:
+            ImageSet = ImageSet[:len(ImageSet)//2]
 
-        for i in range(self.ImageSetRefId//2):
-            start = len(ImageSet)
-            end = (len(ImageSet)//2)
-            print("start, end", start, end, len(ImageSet))
-            if(i != 0):
-                end = 0
+        for i in range(half+1):
 
-            for img in range(start-1, end, -1):
-                print("Stitching Frames %d & %d"%(img+1, img))
+            for img in range(len(ImageSet)-1):
+                print("Stitching Frames %d & %d"%(img*(i+1), img*(i+1)+1))
 
-                ShiTomasiCorners0 = self.computeShiTomasiCorners(ImageSet[img], False)
-                ANMSCorners0, _, _ = self.ANMS(ImageSet[img], ShiTomasiCorners0, False)
+                if(self.UseHarris):
+                    Corners0, Corners_0 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+                else:
+                    Corners0, Corners_0 = self.computeShiTomasiCorners(ImageSet[img], True)
+                ANMSCorners0, _, ANMS_0 = self.ANMS(ImageSet[img], Corners0, True)
                 Features0 = self.featureDescriptor(ImageSet[img], ANMSCorners0, False)
 
-                ShiTomasiCorners1 = self.computeShiTomasiCorners(ImageSet[img-1], False)
-                ANMSCorners1, _, _ = self.ANMS(ImageSet[img-1], ShiTomasiCorners1, False)
-                Features1 = self.featureDescriptor(ImageSet[img-1], ANMSCorners1, False)
+                if(self.UseHarris):
+                    Corners1, Corners_1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+                else:
+                    Corners1, Corners_1 = self.computeShiTomasiCorners(ImageSet[img+1], True)
+                ANMSCorners1, _, ANMS_1 = self.ANMS(ImageSet[img+1], Corners1, True)
+                Features1 = self.featureDescriptor(ImageSet[img+1], ANMSCorners1, False)
 
-                Matches = self.featureMatching(ImageSet[img], ImageSet[img-1], Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-                H = self.RANSAC(Matches, ImageSet[img], ImageSet[img-1], 500, 5, True)
-                I = self.stitchImages(ImageSet[img], ImageSet[img-1], H, True)
+                Matches, Matches_ = self.featureMatching(ImageSet[img], ImageSet[img+1], Features0, Features1, ANMSCorners0, ANMSCorners1, True)
+                H, RANSAC_ = self.RANSAC(Matches, ImageSet[img], ImageSet[img+1], 1000, 5, True)
+                if(H is not None):
+                    I = self.stitchImages(ImageSet[img], ImageSet[img+1], H, True)
+                else:
+                    print("Not enough overlap, skipping image...")
+                    continue
 
+                self.saveResults(self.ImageCount, Corners_0, Corners_1, ANMS_0, ANMS_1, Matches_, RANSAC_, I)
+                # cv2.imwrite(self.ResultPath + self.TestName + '_Stich_' + str(self.ImageCount) + '.png', I)
+                self.ImageCount += 1
                 ImageSet.append(I)
             
-            ImageSet = ImageSet[-(start-img):]
+            ImageSet = ImageSet[-img-1:]
 
         PanoHalves.append(I)
 
@@ -495,18 +452,25 @@ class MyAutoPano():
         PanoFirstHalf = PanoHalves[0]
         PanoSecondHalf = PanoHalves[1]
 
-        ShiTomasiCorners0 = self.computeShiTomasiCorners(PanoFirstHalf, False)
-        ANMSCorners0, _, _ = self.ANMS(PanoFirstHalf, ShiTomasiCorners0, False)
+        if(self.UseHarris):
+            Corners0, Corners_0 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+        else:
+            Corners0, Corners_0 = self.computeShiTomasiCorners(PanoFirstHalf, True)
+        ANMSCorners0, _, ANMS_0 = self.ANMS(PanoFirstHalf, Corners0, True)
         Features0 = self.featureDescriptor(PanoFirstHalf, ANMSCorners0, False)
 
-        # HarrisCorners1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
-        ShiTomasiCorners1 = self.computeShiTomasiCorners(PanoSecondHalf, False)
-        ANMSCorners1, _, _ = self.ANMS(PanoSecondHalf, ShiTomasiCorners1, False)
+        if(self.UseHarris):
+            Corners1, Corners_1 = self.computeHarrisCorners(self.ImageSet[img+1], True)
+        else:
+            Corners1, Corners_0 = self.computeShiTomasiCorners(PanoSecondHalf, True)
+        ANMSCorners1, _, ANMS_1 = self.ANMS(PanoSecondHalf, Corners1, True)
         Features1 = self.featureDescriptor(PanoSecondHalf, ANMSCorners1, False)
 
-        Matches = self.featureMatching(PanoFirstHalf, PanoSecondHalf, Features0, Features1, ANMSCorners0, ANMSCorners1, False)
-        H = self.RANSAC(Matches, PanoFirstHalf, PanoSecondHalf, 2000, 5, True)
+        Matches, Matches_ = self.featureMatching(PanoFirstHalf, PanoSecondHalf, Features0, Features1, ANMSCorners0, ANMSCorners1, True)
+        H, RANSAC_ = self.RANSAC(Matches, PanoFirstHalf, PanoSecondHalf, 2000, 10, True)
         I = self.stitchImages(PanoFirstHalf, PanoSecondHalf, H, True)
 
-        print(self.ResultPath + 'pano.png')
-        cv2.imwrite(self.ResultPath + 'pano.png', I)
+        self.saveResults(self.ImageCount, Corners_0, Corners_1, ANMS_0, ANMS_1, Matches_, RANSAC_, I)
+
+        # print(self.ResultPath + self.TestName + '_Pano.png')
+        # cv2.imwrite(self.ResultPath + self.TestName + '_Pano.png', I)
