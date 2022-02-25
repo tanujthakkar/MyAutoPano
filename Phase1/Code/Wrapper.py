@@ -35,7 +35,6 @@ def main():
 	Parser.add_argument('--ResultPath', type=str, default="../Data/Train/Results/", help='Path to save the generated results')
 	Parser.add_argument('--TestName', type=str, default="Test", help="Name of the test case to store results")
 	Parser.add_argument('--SaveResults', action='store_true', help='Toggle to save generated results')
-	Parser.add_argument('--UseHarris', action='store_true', help='Toggle to use Harris corners instead of Shi-Tomasi')
 	
 	Args = Parser.parse_args()
 	NumImages = Args.NumImages
@@ -43,7 +42,6 @@ def main():
 	ResultPath = Args.ResultPath
 	TestName = Args.TestName
 	SaveResults = Args.SaveResults
-	UseHarris = Args.UseHarris
 
 	pano = MyAutoPano(readImageSet(Args.ImageSetPath), Args.NumFeatures, Args.ResultPath, TestName, 1.0, 1.0)
 	pano.generatePanorama(True)

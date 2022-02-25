@@ -16,3 +16,19 @@ def neighbors(a, radius, row_number, column_number):
 
 def remap(img, min_, max_):
 	return cv2.normalize(np.float32(img), None, min_, max_, cv2.NORM_MINMAX)
+
+def crop_image(Image):
+
+    img = Image.copy()
+    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+
+    _,thresh = cv2.threshold(gray,10,255,cv2.THRESH_BINARY)
+    kernel = np.ones((5,5), np.uint8)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    x,y,w,h = cv2.boundingRect(contours[len(contours)-1])
+    crop = img[y:y+h,x:x+w]
+
+    return crop

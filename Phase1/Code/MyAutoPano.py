@@ -322,20 +322,13 @@ class MyAutoPano():
         Image0_Warped = cv2.warpPerspective(Image0, np.dot(H_translate, H), (x_max-x_min, y_max-y_min))
 
         ImageStitched = np.copy(Image0_Warped)
-        # ImageStitched[-y_min:-y_min+h1, -x_min: -x_min+w1] = Image1
 
         idx = np.s_[-y_min:-y_min+h1, -x_min: -x_min+w1]
         ImageStitched[idx] = self.mean_blend(ImageStitched[idx], Image1)
 
-        # idx = np.where(Image1 == [0,0,0])
-        # y = idx[0] + -y_min 
-        # x = idx[1] + -x_min 
-        # ImageStitched[y,x] = Image0_Warped[y,x]
-
         if(Visualize):
-            # cv2.imshow("Image0_", Image0_Warped)
             cv2.imshow("Stiched", ImageStitched)
-            # cv2.waitKey(3)
+            cv2.waitKey(3)
 
         return ImageStitched
     
@@ -447,5 +440,6 @@ class MyAutoPano():
         Matches, Matches_ = self.featureMatching(PanoFirstHalf, PanoSecondHalf, Features0, Features1, ANMSCorners0, ANMSCorners1, True)
         H, RANSAC_ = self.RANSAC(Matches, PanoFirstHalf, PanoSecondHalf, 2000, 10, True)
         I = self.stitchImages(PanoFirstHalf, PanoSecondHalf, H, True)
+        cv2.waitKey(0)
 
         self.saveResults(self.ImageCount, Corners_0, Corners_1, ANMS_0, ANMS_1, Matches_, RANSAC_, I)
